@@ -1,4 +1,7 @@
+import asyncio
 import unittest
+
+from textual.widgets import DataTable, ListView, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, Row
 from dbuslens.tui import DBusLensReportApp
@@ -28,12 +31,16 @@ class TextualLayoutTests(unittest.TestCase):
                 )
             ],
         )
-        app = DBusLensReportApp(report)
-        ids = app.region_ids()
 
-        self.assertIn("view-nav", ids)
-        self.assertIn("main-table", ids)
-        self.assertIn("detail-pane", ids)
+        async def assert_regions() -> None:
+            app = DBusLensReportApp(report)
+
+            async with app.run_test():
+                self.assertIsInstance(app.query_one("#view-nav"), ListView)
+                self.assertIsInstance(app.query_one("#main-table"), DataTable)
+                self.assertIsInstance(app.query_one("#detail-pane"), Static)
+
+        asyncio.run(assert_regions())
 
 
 if __name__ == "__main__":

@@ -61,9 +61,6 @@ class DBusLensReportApp(App[None]):
         self._populate_main_table()
         self._populate_detail_pane()
 
-    def region_ids(self) -> tuple[str, str, str]:
-        return ("view-nav", "main-table", "detail-pane")
-
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
         nav.index = 0 if self.state.active_view == "outbound" else 1
