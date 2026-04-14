@@ -7,6 +7,34 @@ from dbuslens.tui import DBusLensReportApp
 
 
 class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
+    def test_selecting_main_row_updates_detail_panel(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=2,
+            actionable_events=2,
+            skipped_blocks=0,
+            outbound_rows=[
+                Row(
+                    name=":1.10",
+                    process="demo-client",
+                    count=2,
+                    children=[DetailRow(name="org.example.Demo.Ping", process=None, count=2)],
+                ),
+                Row(
+                    name=":1.11",
+                    process="demo-service",
+                    count=1,
+                    children=[DetailRow(name="org.example.Demo.Echo", process=None, count=1)],
+                ),
+            ],
+            inbound_rows=[],
+        )
+        app = DBusLensReportApp(report)
+        app.state.selected_index = 1
+        app.sync_detail()
+
+        self.assertIn("demo-service", app.current_detail_text())
+
     async def test_textual_ui_defines_navigation_main_and_detail_regions(self) -> None:
         report = AnalysisReport(
             source_path="record.cap",
