@@ -30,7 +30,7 @@ def _make_report() -> AnalysisReport:
 
 
 class ReportAppStateTests(unittest.TestCase):
-    def test_report_app_state_tracks_view_and_selection(self) -> None:
+    def test_report_app_state_tracks_view(self) -> None:
         report = _make_report()
         state = ReportAppState(report)
 
