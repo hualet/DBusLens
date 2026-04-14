@@ -5,7 +5,7 @@ from pathlib import Path
 from dbuslens.cli import build_parser
 from dbuslens.record import build_default_output_path
 from dbuslens.tui import DBusLensReportApp
-from dbuslens.models import AnalysisReport, DetailRow, Row
+from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
 
 
 class CliHelpersTests(unittest.TestCase):
@@ -42,7 +42,7 @@ class ReportAppConstructionTests(unittest.TestCase):
             outbound_rows=[
                 Row(
                     name="svc",
-                    process="demo",
+                    process=ProcessInfo(short_name="demo", pid=4321),
                     count=1,
                     children=[DetailRow(name="op", process=None, count=1)],
                 )
@@ -52,7 +52,13 @@ class ReportAppConstructionTests(unittest.TestCase):
                     name="op",
                     process=None,
                     count=1,
-                    children=[DetailRow(name="svc", process="demo", count=1)],
+                    children=[
+                        DetailRow(
+                            name="svc",
+                            process=ProcessInfo(short_name="demo", pid=4321),
+                            count=1,
+                        )
+                    ],
                 )
             ],
         )

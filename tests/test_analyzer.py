@@ -1,7 +1,7 @@
 import unittest
 
 from dbuslens.analyzer import build_report
-from dbuslens.models import Event
+from dbuslens.models import Event, ProcessInfo
 
 
 class BuildReportTests(unittest.TestCase):
@@ -60,15 +60,18 @@ class BuildReportTests(unittest.TestCase):
         report = build_report(
             events,
             resolve_process=lambda service: {
-                ":1.10": "demo-client",
-                "org.example.Service": "demo-service",
+                ":1.10": ProcessInfo(short_name="demo-client", pid=1010),
+                "org.example.Service": ProcessInfo(short_name="demo-service", pid=2020),
             }.get(service),
         )
 
         self.assertEqual(report.total_events, 4)
         self.assertEqual(report.actionable_events, 3)
         self.assertEqual(report.outbound_rows[0].name, ":1.10")
-        self.assertEqual(report.outbound_rows[0].process, "demo-client")
+        self.assertEqual(
+            report.outbound_rows[0].process,
+            ProcessInfo(short_name="demo-client", pid=1010),
+        )
         self.assertEqual(report.outbound_rows[0].count, 2)
         self.assertEqual(
             report.outbound_rows[0].children[0].name,
@@ -77,7 +80,10 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(report.inbound_rows[0].name, "org.example.Demo.Ping")
         self.assertEqual(report.inbound_rows[0].count, 2)
         self.assertEqual(report.inbound_rows[0].children[0].name, ":1.10")
-        self.assertEqual(report.inbound_rows[0].children[0].process, "demo-client")
+        self.assertEqual(
+            report.inbound_rows[0].children[0].process,
+            ProcessInfo(short_name="demo-client", pid=1010),
+        )
 
     def test_build_report_uses_fallback_labels(self) -> None:
         events = [

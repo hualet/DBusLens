@@ -1,6 +1,6 @@
 import unittest
 
-from dbuslens.models import AnalysisReport, DetailRow, Row
+from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
 from dbuslens.report_app import (
     ReportAppState,
     detail_columns,
@@ -23,7 +23,7 @@ def _make_report() -> AnalysisReport:
         outbound_rows=[
             Row(
                 name="svc",
-                process="demo",
+                process=ProcessInfo(short_name="demo", pid=4321),
                 count=1,
                 children=[DetailRow(name="op", process=None, count=1)],
             )
@@ -33,7 +33,13 @@ def _make_report() -> AnalysisReport:
                 name="op",
                 process=None,
                 count=1,
-                children=[DetailRow(name="svc", process="demo", count=1)],
+                children=[
+                    DetailRow(
+                        name="svc",
+                        process=ProcessInfo(short_name="demo", pid=4321),
+                        count=1,
+                    )
+                ],
             )
         ],
     )
@@ -77,13 +83,14 @@ class ReportAppStateTests(unittest.TestCase):
         report = _make_report()
         state = ReportAppState(report)
 
-        self.assertEqual(main_rows(state), [("1", "svc", "demo")])
+        self.assertEqual(main_rows(state), [("1", "svc", "demo [4321]")])
         self.assertEqual(
             detail_lines(state),
             [
                 "Selected: svc",
                 "Count: 1",
-                "Process: demo",
+                "Process: demo [4321]",
+                "PID: 4321",
                 "Details: 1 row(s)",
             ],
         )
@@ -109,7 +116,7 @@ class ReportAppStateTests(unittest.TestCase):
             outbound_rows=[
                 Row(
                     name="svc",
-                    process="demo",
+                    process=ProcessInfo(short_name="demo", pid=4321),
                     count=3,
                     children=[
                         DetailRow(name="op-a", process=None, count=2),
@@ -123,8 +130,16 @@ class ReportAppStateTests(unittest.TestCase):
                     process=None,
                     count=2,
                     children=[
-                        DetailRow(name="svc-a", process="proc-a", count=1),
-                        DetailRow(name="svc-b", process="proc-b", count=1),
+                        DetailRow(
+                            name="svc-a",
+                            process=ProcessInfo(short_name="proc-a", pid=1001),
+                            count=1,
+                        ),
+                        DetailRow(
+                            name="svc-b",
+                            process=ProcessInfo(short_name="proc-b", pid=1002),
+                            count=1,
+                        ),
                     ],
                 )
             ],
@@ -139,7 +154,7 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(detail_columns(state), ("Count", "Service", "Process"))
         self.assertEqual(
             detail_rows(state),
-            [("1", "svc-a", "proc-a"), ("1", "svc-b", "proc-b")],
+            [("1", "svc-a", "proc-a [1001]"), ("1", "svc-b", "proc-b [1002]")],
         )
 
     def test_metadata_text_includes_report_stats(self) -> None:
@@ -159,7 +174,10 @@ class ReportAppStateTests(unittest.TestCase):
             outbound_rows=[
                 Row(
                     name="svc",
-                    process="very-long-process-name-that-should-not-be-capped-at-forty",
+                    process=ProcessInfo(
+                        short_name="very-long-process-name-that-should-not-be-capped-at-forty",
+                        pid=1234,
+                    ),
                     count=1,
                     children=[
                         DetailRow(
@@ -178,7 +196,10 @@ class ReportAppStateTests(unittest.TestCase):
                     children=[
                         DetailRow(
                             name="svc",
-                            process="another-very-long-process-name-used-in-detail-pane",
+                            process=ProcessInfo(
+                                short_name="another-very-long-process-name-used-in-detail-pane",
+                                pid=5678,
+                            ),
                             count=1,
                         )
                     ],

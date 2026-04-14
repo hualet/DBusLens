@@ -38,16 +38,28 @@ class ParseResult:
 
 
 @dataclass(frozen=True)
+class ProcessInfo:
+    short_name: str
+    pid: int | None
+
+    @property
+    def display_name(self) -> str:
+        if self.pid is None:
+            return self.short_name
+        return f"{self.short_name} [{self.pid}]"
+
+
+@dataclass(frozen=True)
 class DetailRow:
     name: str
-    process: str | None
+    process: ProcessInfo | None
     count: int
 
 
 @dataclass(frozen=True)
 class Row:
     name: str
-    process: str | None
+    process: ProcessInfo | None
     count: int
     children: list[DetailRow]
 

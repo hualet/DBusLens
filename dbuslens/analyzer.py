@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Callable
 
-from dbuslens.models import AnalysisReport, DetailRow, Event, Row
+from dbuslens.models import AnalysisReport, DetailRow, Event, ProcessInfo, Row
 from dbuslens.processes import resolve_process_name
 
 
@@ -15,7 +15,7 @@ def build_report(
     *,
     source_path: str = "<memory>",
     skipped_blocks: int = 0,
-    resolve_process: Callable[[str], str | None] = resolve_process_name,
+    resolve_process: Callable[[str], ProcessInfo | None] = resolve_process_name,
 ) -> AnalysisReport:
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
@@ -47,7 +47,7 @@ def build_report(
 def _build_rows(
     totals: Counter[str],
     children: dict[str, Counter[str]],
-    resolve_process: Callable[[str], str | None],
+    resolve_process: Callable[[str], ProcessInfo | None],
 ) -> list[Row]:
     rows = []
     for name, count in sorted(totals.items(), key=lambda item: (-item[1], item[0])):

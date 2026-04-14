@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import subprocess
 
+from dbuslens.models import ProcessInfo
+
 
 DBUS_ARGS = (
     "--dest",
@@ -14,7 +16,7 @@ DBUS_ARGS = (
 )
 
 
-def resolve_process_name(service: str) -> str | None:
+def resolve_process_name(service: str) -> ProcessInfo | None:
     if not service or service == "<unknown>":
         return None
 
@@ -22,9 +24,9 @@ def resolve_process_name(service: str) -> str | None:
         pid = _lookup_pid(bus, service)
         if pid is None:
             continue
-        process_name = _read_process_name(pid)
+        process_name = _read_process_short_name(pid)
         if process_name:
-            return process_name
+            return ProcessInfo(short_name=process_name, pid=pid)
     return None
 
 
@@ -53,7 +55,7 @@ def _lookup_pid(bus: str, service: str) -> int | None:
     return int(match.group(1))
 
 
-def _read_process_name(pid: int) -> str | None:
+def _read_process_short_name(pid: int) -> str | None:
     for candidate in (Path(f"/proc/{pid}/comm"), Path(f"/proc/{pid}/cmdline")):
         try:
             raw = candidate.read_bytes()

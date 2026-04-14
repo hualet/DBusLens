@@ -2,7 +2,7 @@ import unittest
 
 from textual.widgets import DataTable, Footer, Header, ListView, Static
 
-from dbuslens.models import AnalysisReport, DetailRow, Row
+from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
 from dbuslens.tui import DBusLensReportApp
 
 
@@ -16,7 +16,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             outbound_rows=[
                 Row(
                     name=":1.10",
-                    process="demo-client",
+                    process=ProcessInfo(short_name="demo-client", pid=1010),
                     count=2,
                     children=[
                         DetailRow(name="org.example.Demo.Ping", process=None, count=2),
@@ -25,7 +25,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
                 ),
                 Row(
                     name=":1.11",
-                    process="demo-service",
+                    process=ProcessInfo(short_name="demo-service", pid=1111),
                     count=1,
                     children=[DetailRow(name="org.example.Demo.Call", process=None, count=1)],
                 ),
@@ -42,7 +42,8 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertEqual(app.state.selected_index, 1)
-            self.assertIn("demo-service", str(detail.render()))
+            self.assertIn("demo-service [1111]", str(detail.render()))
+            self.assertIn("PID: 1111", str(detail.render()))
             self.assertEqual(detail_table.row_count, 1)
 
     async def test_textual_ui_shows_report_metadata_and_all_detail_rows(self) -> None:
@@ -54,7 +55,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             outbound_rows=[
                 Row(
                     name=":1.10",
-                    process="demo-client",
+                    process=ProcessInfo(short_name="demo-client", pid=1010),
                     count=3,
                     children=[
                         DetailRow(name="org.example.Demo.Ping", process=None, count=2),
@@ -83,7 +84,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             outbound_rows=[
                 Row(
                     name=":1.10",
-                    process="demo-client",
+                    process=ProcessInfo(short_name="demo-client", pid=1010),
                     count=2,
                     children=[DetailRow(name="org.example.Demo.Ping", process=None, count=2)],
                 )
@@ -93,7 +94,13 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
                     name="org.example.Demo.Ping",
                     process=None,
                     count=2,
-                    children=[DetailRow(name=":1.10", process="demo-client", count=2)],
+                    children=[
+                        DetailRow(
+                            name=":1.10",
+                            process=ProcessInfo(short_name="demo-client", pid=1010),
+                            count=2,
+                        )
+                    ],
                 )
             ],
         )

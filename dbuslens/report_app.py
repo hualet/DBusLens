@@ -42,7 +42,10 @@ def current_rows(state: ReportAppState) -> list[Row]:
 def main_rows(state: ReportAppState) -> list[tuple[str, ...]]:
     rows = current_rows(state)
     if state.active_view == "outbound":
-        return [(str(row.count), row.name, row.process or "-") for row in rows]
+        return [
+            (str(row.count), row.name, row.process.display_name if row.process else "-")
+            for row in rows
+        ]
     return [(str(row.count), row.name) for row in rows]
 
 
@@ -67,7 +70,9 @@ def detail_lines(state: ReportAppState) -> list[str]:
 
     lines = [f"Selected: {current.name}", f"Count: {current.count}"]
     if current.process:
-        lines.append(f"Process: {current.process}")
+        lines.append(f"Process: {current.process.display_name}")
+        if current.process.pid is not None:
+            lines.append(f"PID: {current.process.pid}")
     if not current.children:
         lines.append("No child entries.")
     else:
@@ -87,7 +92,10 @@ def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
         return []
     if state.active_view == "outbound":
         return [(str(row.count), row.name) for row in current.children]
-    return [(str(row.count), row.name, row.process or "-") for row in current.children]
+    return [
+        (str(row.count), row.name, row.process.display_name if row.process else "-")
+        for row in current.children
+    ]
 
 
 def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
@@ -111,6 +119,8 @@ def metadata_text(report: AnalysisReport) -> str:
         f"actionable={report.actionable_events}  "
         f"skipped={report.skipped_blocks}"
     )
+
+
 def _width_for_column(
     headers: tuple[str, ...],
     rows: list[tuple[str, ...]],
