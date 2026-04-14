@@ -209,5 +209,8 @@ __marimo__/
 # codex empty file
 .codex
 
+# superpowers 
+.superpowers
+
 # record output
 record.cap
