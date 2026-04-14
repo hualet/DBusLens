@@ -9,26 +9,27 @@ from dbuslens.models import AnalysisReport, Row
 
 
 class CliHelpersTests(unittest.TestCase):
-    def test_build_default_output_path_uses_bus_and_timestamp(self) -> None:
+    def test_build_parser_defines_record_and_report(self) -> None:
+        parser = build_parser()
+
+        record_args = parser.parse_args(["record", "--duration", "10"])
+        report_args = parser.parse_args(["report"])
+
+        self.assertEqual(record_args.command, "record")
+        self.assertEqual(record_args.bus, "session")
+        self.assertEqual(record_args.duration, 10)
+        self.assertEqual(record_args.output, "record.cap")
+        self.assertEqual(report_args.command, "report")
+        self.assertEqual(report_args.input, "record.cap")
+
+    def test_build_default_output_path_returns_record_cap_in_workdir(self) -> None:
         path = build_default_output_path(
             "session",
             now=datetime(2026, 4, 14, 16, 30, 5),
             base_dir=Path("/tmp"),
         )
 
-        self.assertEqual(path, Path("/tmp/dbuslens-session-20260414-163005.pcap"))
-
-    def test_build_parser_defines_record_and_analyze(self) -> None:
-        parser = build_parser()
-
-        record_args = parser.parse_args(["record", "--bus", "session", "--duration", "10"])
-        analyze_args = parser.parse_args(["analyze", "--input", "sample.pcap"])
-
-        self.assertEqual(record_args.command, "record")
-        self.assertEqual(record_args.bus, "session")
-        self.assertEqual(record_args.duration, 10)
-        self.assertEqual(analyze_args.command, "analyze")
-        self.assertEqual(analyze_args.input, "sample.pcap")
+        self.assertEqual(path, Path("/tmp/record.cap"))
 
 
 class BrowserStateTests(unittest.TestCase):

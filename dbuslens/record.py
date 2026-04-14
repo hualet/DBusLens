@@ -24,10 +24,8 @@ def build_default_output_path(
     now: datetime | None = None,
     base_dir: Path | None = None,
 ) -> Path:
-    current_time = now or datetime.now()
     directory = base_dir or Path.cwd()
-    stamp = current_time.strftime("%Y%m%d-%H%M%S")
-    return directory / f"dbuslens-{bus}-{stamp}.pcap"
+    return directory / "record.cap"
 
 
 def record_monitor(

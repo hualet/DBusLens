@@ -12,15 +12,15 @@ uv sync
 Record a fixed-duration `.pcap` capture:
 
 ```bash
-uv run dbuslens record --bus session --duration 10
+uv run dbuslens record --duration 10
 uv run dbuslens record --bus system --duration 60 --output /tmp/system.pcap
 ```
 
-Analyze a saved `.pcap` and open the terminal UI:
+Report a saved `.pcap` in the terminal UI:
 
 ```bash
-uv run dbuslens analyze --input /tmp/system.pcap
-uv run dbuslens analyze --input /tmp/system.pcap --cache /tmp/system.json
+uv run dbuslens report
+uv run dbuslens report --input /tmp/system.pcap
 ```
 
 Keyboard controls in the TUI:
