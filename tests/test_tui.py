@@ -1,5 +1,6 @@
 import unittest
 
+from textual.css.query import NoMatches
 from textual.widgets import DataTable, Footer, Header, ListView, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
@@ -7,6 +8,29 @@ from dbuslens.tui import DBusLensReportApp
 
 
 class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
+    def test_textual_ui_styles_datatable_components(self) -> None:
+        css = DBusLensReportApp.CSS
+
+        self.assertIn("DataTable > .datatable--header", css)
+        self.assertIn("DataTable > .datatable--odd-row", css)
+        self.assertIn("DataTable > .datatable--even-row", css)
+        self.assertIn("DataTable > .datatable--cursor", css)
+
+    async def test_textual_ui_uses_monitor_branding(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test():
+            app_bar = app.query_one("#app-bar", Static)
+            self.assertIn("Monitor", str(app_bar.render()))
+
     async def test_selecting_main_row_updates_detail_panel(self) -> None:
         report = AnalysisReport(
             source_path="record.cap",
@@ -107,7 +131,9 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         app = DBusLensReportApp(report)
 
         async with app.run_test():
-            self.assertIsInstance(app.query_one(Header), Header)
+            with self.assertRaises(NoMatches):
+                app.query_one(Header)
+            self.assertIsInstance(app.query_one("#app-bar"), Static)
             self.assertIsInstance(app.query_one("#report-meta"), Static)
             self.assertIsInstance(app.query_one("#view-nav"), ListView)
             self.assertIsInstance(app.query_one("#main-table"), DataTable)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DataTable, Footer, Header, Label, ListItem, ListView, Static
+from textual.widgets import DataTable, Footer, Label, ListItem, ListView, Static
 
 from dbuslens.models import AnalysisReport
 from dbuslens.report_app import (
@@ -31,29 +31,50 @@ class DBusLensReportApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
+        background: #091312;
+        color: #e6faf7;
     }
 
-    #body {
-        height: 1fr;
+    #app-bar {
+        dock: top;
+        height: 3;
+        padding: 0 2;
+        background: #101717;
+        color: #f4fffd;
+        border-bottom: solid #21403b;
+        text-style: bold;
     }
 
     #report-meta {
         dock: top;
-        padding: 0 1;
-        color: $text-muted;
+        height: 3;
+        margin: 1 1 0 1;
+        padding: 0 2;
+        background: #0f1818;
+        color: #9fc7c3;
+        border: round #24423e;
     }
 
-    #view-nav, #main-table, #detail-pane, #detail-table {
-        border: round $surface;
+    #body {
+        height: 1fr;
+        margin: 1;
+        padding: 0;
     }
 
     #view-nav {
         width: 24;
+        padding: 1 0;
+        border: round #275048;
+        background: #0f1b1a;
+        color: #dcf7f3;
     }
 
     #main-table {
         height: 1fr;
         width: 3fr;
+        border: round #25433f;
+        background: #0f1b1a;
+        color: #e7faf7;
     }
 
     #detail-column {
@@ -62,16 +83,85 @@ class DBusLensReportApp(App[None]):
     }
 
     #detail-pane {
-        height: 8;
-        padding: 0 1;
+        height: 9;
+        padding: 1 2;
+        border: round #235357;
+        background: #0d1717;
+        color: #d2eeeb;
     }
 
     #detail-table {
         height: 1fr;
+        border: round #235357;
+        background: #0d1717;
+        color: #ecfefb;
+    }
+
+    DataTable {
+        background: transparent;
+    }
+
+    DataTable > .datatable--header {
+        background: #15312f;
+        color: #fde68a;
+        text-style: bold;
+    }
+
+    DataTable > .datatable--header-cursor {
+        background: #1e413d;
+        color: #fef3b5;
+        text-style: bold;
+    }
+
+    DataTable > .datatable--odd-row {
+        background: #102725;
+        color: #e7faf7;
+    }
+
+    DataTable > .datatable--even-row {
+        background: #0d211f;
+        color: #dbf4f0;
+    }
+
+    DataTable > .datatable--cursor {
+        background: #19413d;
+        color: #f8fffe;
+        text-style: bold;
+    }
+
+    DataTable > .datatable--hover {
+        background: #163532;
+        color: #f0fffd;
+    }
+
+    #view-nav > ListItem {
+        margin: 0 1;
+        padding: 0 1;
+        color: #9fc7c3;
+        background: transparent;
+        border-left: tall transparent;
+    }
+
+    #view-nav > ListItem.--highlight,
+    #view-nav > ListItem.--selected {
+        color: #f0fffd;
+        background: #12302d;
+        border-left: tall #34d399;
     }
 
     .pane-focus {
-        border: round $accent;
+        border: round #2dd4bf;
+        tint: #102624 12%;
+    }
+
+    Footer {
+        background: #0f1716;
+        color: #9dc5c1;
+    }
+
+    Footer > .footer--highlight {
+        background: #173331;
+        color: #fff4bf;
     }
     """
 
@@ -81,7 +171,7 @@ class DBusLensReportApp(App[None]):
         self.state = ReportAppState(report)
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Static(id="app-bar")
         yield Static(id="report-meta")
         with Horizontal(id="body"):
             yield ListView(
@@ -96,14 +186,25 @@ class DBusLensReportApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._populate_app_bar()
         self._populate_report_meta()
         self._populate_navigation()
         self._populate_main_table()
         self.refresh_detail()
         self._focus_main_table()
 
+    def _populate_app_bar(self) -> None:
+        self.query_one("#app-bar", Static).update(
+            "[b #67e8f9]DBusLens[/]  [#fde68a]report[/]  [#34d399]Monitor[/]  "
+            "[#84b7b2]Operations-style capture inspector for D-Bus traffic[/]"
+        )
+
     def _populate_report_meta(self) -> None:
-        self.query_one("#report-meta", Static).update(metadata_text(self.report))
+        self.query_one("#report-meta", Static).update(
+            "[#67e8f9]Capture[/]  "
+            f"[#f8fffe]{metadata_text(self.report)}[/]  "
+            "[#84b7b2]Use Tab to rotate focus and Enter to inspect details[/]"
+        )
 
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
@@ -112,6 +213,7 @@ class DBusLensReportApp(App[None]):
     def _populate_main_table(self) -> None:
         table = self.query_one("#main-table", DataTable)
         table.cursor_type = "row"
+        table.zebra_stripes = True
         if table.columns:
             table.clear(columns=True)
         for label, width in zip(main_columns(self.state), main_column_widths(self.state)):
@@ -125,6 +227,7 @@ class DBusLensReportApp(App[None]):
         self.query_one("#detail-pane", Static).update("\n".join(detail_lines(self.state)))
         table = self.query_one("#detail-table", DataTable)
         table.cursor_type = "row"
+        table.zebra_stripes = True
         if table.columns:
             table.clear(columns=True)
         for label, width in zip(detail_columns(self.state), detail_column_widths(self.state)):
