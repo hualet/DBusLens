@@ -38,5 +38,5 @@
 - [ ] 打包 deb 
 - [ ] 可以通过更直观的图来展示分析结果
 - [ ] 支持 `method_call -> method_return/error` 配对，展示高累计耗时和高均值耗时热点
-- [ ] 支持把 `:1.xxx` 这类唯一名映射成更可读的 well-known name 或进程信息
+- [x] 支持把 `:1.xxx` 这类唯一名映射成更可读的 well-known name 或进程信息
 
