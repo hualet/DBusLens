@@ -208,3 +208,6 @@ __marimo__/
 
 # codex empty file
 .codex
+
+# record output
+record.cap
