@@ -22,7 +22,7 @@ class ReportAppState:
             if self.active_view == "outbound"
             else self.report.inbound_rows
         )
-        if not rows:
+        if self.selected_index < 0 or self.selected_index >= len(rows):
             return None
         return rows[self.selected_index]
 

@@ -45,6 +45,24 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(state.current_row.name, "op")
         self.assertEqual(main_columns(state), ("Count", "Operation"))
 
+    def test_current_row_returns_none_for_empty_or_out_of_range_selection(self) -> None:
+        report = _make_report()
+
+        self.assertIsNone(ReportAppState(report, selected_index=-1).current_row)
+        self.assertIsNone(ReportAppState(report, selected_index=1).current_row)
+        self.assertIsNone(
+            ReportAppState(
+                AnalysisReport(
+                    source_path="empty.log",
+                    total_events=0,
+                    actionable_events=0,
+                    skipped_blocks=0,
+                    outbound_rows=[],
+                    inbound_rows=[],
+                )
+            ).current_row
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
