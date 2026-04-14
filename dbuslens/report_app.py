@@ -16,22 +16,14 @@ class ReportAppState:
         self.selected_index = 0
 
     @property
-    def current_rows(self) -> list[Row]:
-        return (
+    def current_row(self) -> Row | None:
+        rows = (
             self.report.outbound_rows
             if self.active_view == "outbound"
             else self.report.inbound_rows
         )
-
-    @property
-    def current_row(self) -> Row | None:
-        rows = self.current_rows
         if not rows:
             return None
-        if self.selected_index < 0:
-            return rows[0]
-        if self.selected_index >= len(rows):
-            return rows[-1]
         return rows[self.selected_index]
 
 
