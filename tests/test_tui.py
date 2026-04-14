@@ -7,7 +7,7 @@ from dbuslens.tui import DBusLensReportApp
 
 
 class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
-    def test_selecting_main_row_updates_detail_panel(self) -> None:
+    async def test_selecting_main_row_updates_detail_panel(self) -> None:
         report = AnalysisReport(
             source_path="record.cap",
             total_events=2,
@@ -30,10 +30,15 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             inbound_rows=[],
         )
         app = DBusLensReportApp(report)
-        app.state.selected_index = 1
-        app.sync_detail()
 
-        self.assertIn("demo-service", app.current_detail_text())
+        async with app.run_test() as pilot:
+            detail = app.query_one("#detail-pane", Static)
+
+            await pilot.press("down")
+            await pilot.pause()
+
+            self.assertEqual(app.state.selected_index, 1)
+            self.assertIn("demo-service", str(detail.render()))
 
     async def test_textual_ui_defines_navigation_main_and_detail_regions(self) -> None:
         report = AnalysisReport(

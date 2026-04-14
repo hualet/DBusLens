@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from textual.app import App, ComposeResult, ScreenStackError
+from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Label, ListItem, ListView, Static
 
@@ -56,7 +56,6 @@ class DBusLensReportApp(App[None]):
         super().__init__()
         self.report = report
         self.state = ReportAppState(report)
-        self._detail_text = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -93,20 +92,9 @@ class DBusLensReportApp(App[None]):
         if table.row_count:
             table.move_cursor(row=min(self.state.selected_index, table.row_count - 1), animate=False)
 
-    def _populate_detail_pane(self) -> None:
-        detail = self.query_one("#detail-pane", Static)
-        detail.update(self._detail_text)
-
-    def current_detail_text(self) -> str:
-        return self._detail_text
-
-    def sync_detail(self) -> None:
-        self.refresh_detail()
-
     def refresh_detail(self) -> None:
-        self._detail_text = "\n".join(detail_lines(self.state))
-        if self._has_screen():
-            self._populate_detail_pane()
+        detail = self.query_one("#detail-pane", Static)
+        detail.update("\n".join(detail_lines(self.state)))
 
     def action_show_outbound(self) -> None:
         if self.state.active_view != "outbound":
@@ -173,13 +161,6 @@ class DBusLensReportApp(App[None]):
             widget.remove_class("pane-focus")
             if focused is widget:
                 widget.add_class("pane-focus")
-
-    def _has_screen(self) -> bool:
-        try:
-            self.screen
-        except ScreenStackError:
-            return False
-        return True
 
 
 def run_browser(report: AnalysisReport) -> None:
