@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dbuslens.models import AnalysisReport, DetailRow, Row
+from dbuslens.models import AnalysisReport, Row
 
 
 @dataclass
@@ -46,6 +46,20 @@ def main_rows(state: ReportAppState) -> list[tuple[str, ...]]:
     return [(str(row.count), row.name) for row in rows]
 
 
+def main_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
+    rows = main_rows(state)
+    if state.active_view == "outbound":
+        return (
+            8,
+            _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
+            _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
+        )
+    return (
+        8,
+        _width_for_column(("Operation",), rows, 1, minimum=24, maximum=72),
+    )
+
+
 def detail_lines(state: ReportAppState) -> list[str]:
     current = state.current_row
     if current is None:
@@ -54,14 +68,57 @@ def detail_lines(state: ReportAppState) -> list[str]:
     lines = [f"Selected: {current.name}", f"Count: {current.count}"]
     if current.process:
         lines.append(f"Process: {current.process}")
-    if current.children:
-        lines.append(f"First detail: {_detail_summary(current.children[0])}")
-    else:
+    if not current.children:
         lines.append("No child entries.")
+    else:
+        lines.append(f"Details: {len(current.children)} row(s)")
     return lines
 
 
-def _detail_summary(row: DetailRow) -> str:
-    if row.process:
-        return f"{row.name} ({row.process}) x{row.count}"
-    return f"{row.name} x{row.count}"
+def detail_columns(state: ReportAppState) -> tuple[str, ...]:
+    if state.active_view == "outbound":
+        return ("Count", "Operation")
+    return ("Count", "Service", "Process")
+
+
+def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
+    current = state.current_row
+    if current is None:
+        return []
+    if state.active_view == "outbound":
+        return [(str(row.count), row.name) for row in current.children]
+    return [(str(row.count), row.name, row.process or "-") for row in current.children]
+
+
+def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
+    rows = detail_rows(state)
+    if state.active_view == "outbound":
+        return (
+            8,
+            _width_for_column(("Operation",), rows, 1, minimum=24, maximum=96),
+        )
+    return (
+        8,
+        _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
+        _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
+    )
+
+
+def metadata_text(report: AnalysisReport) -> str:
+    return (
+        f"file={report.source_path}  "
+        f"events={report.total_events}  "
+        f"actionable={report.actionable_events}  "
+        f"skipped={report.skipped_blocks}"
+    )
+def _width_for_column(
+    headers: tuple[str, ...],
+    rows: list[tuple[str, ...]],
+    index: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    candidates = [len(header) for header in headers]
+    candidates.extend(len(row[index]) for row in rows if len(row) > index)
+    return min(max(max(candidates, default=minimum) + 2, minimum), maximum)

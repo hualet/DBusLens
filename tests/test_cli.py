@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dbuslens.cli import build_parser
 from dbuslens.record import build_default_output_path
-from dbuslens.tui import BrowserState
+from dbuslens.tui import DBusLensReportApp
 from dbuslens.models import AnalysisReport, DetailRow, Row
 
 
@@ -32,8 +32,8 @@ class CliHelpersTests(unittest.TestCase):
         self.assertEqual(path, Path("/tmp/record.cap"))
 
 
-class BrowserStateTests(unittest.TestCase):
-    def test_browser_state_switches_views(self) -> None:
+class ReportAppConstructionTests(unittest.TestCase):
+    def test_report_app_keeps_report_reference(self) -> None:
         report = AnalysisReport(
             source_path="sample.log",
             total_events=1,
@@ -56,11 +56,10 @@ class BrowserStateTests(unittest.TestCase):
                 )
             ],
         )
-        state = BrowserState(report)
+        app = DBusLensReportApp(report)
 
-        state.switch_view()
-
-        self.assertEqual(state.active_view, "inbound")
+        self.assertEqual(app.report, report)
+        self.assertEqual(app.state.active_view, "outbound")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,17 @@
 import unittest
 
 from dbuslens.models import AnalysisReport, DetailRow, Row
-from dbuslens.report_app import ReportAppState, detail_lines, main_columns, main_rows
+from dbuslens.report_app import (
+    ReportAppState,
+    detail_columns,
+    detail_column_widths,
+    detail_lines,
+    detail_rows,
+    main_column_widths,
+    main_columns,
+    main_rows,
+    metadata_text,
+)
 
 
 def _make_report() -> AnalysisReport:
@@ -74,7 +84,7 @@ class ReportAppStateTests(unittest.TestCase):
                 "Selected: svc",
                 "Count: 1",
                 "Process: demo",
-                "First detail: op x1",
+                "Details: 1 row(s)",
             ],
         )
 
@@ -86,9 +96,100 @@ class ReportAppStateTests(unittest.TestCase):
             [
                 "Selected: op",
                 "Count: 1",
-                "First detail: svc (demo) x1",
+                "Details: 1 row(s)",
             ],
         )
+
+    def test_report_app_provides_detail_table_rows(self) -> None:
+        report = AnalysisReport(
+            source_path="sample.log",
+            total_events=3,
+            actionable_events=3,
+            skipped_blocks=0,
+            outbound_rows=[
+                Row(
+                    name="svc",
+                    process="demo",
+                    count=3,
+                    children=[
+                        DetailRow(name="op-a", process=None, count=2),
+                        DetailRow(name="op-b", process=None, count=1),
+                    ],
+                )
+            ],
+            inbound_rows=[
+                Row(
+                    name="op-a",
+                    process=None,
+                    count=2,
+                    children=[
+                        DetailRow(name="svc-a", process="proc-a", count=1),
+                        DetailRow(name="svc-b", process="proc-b", count=1),
+                    ],
+                )
+            ],
+        )
+        state = ReportAppState(report)
+
+        self.assertEqual(detail_columns(state), ("Count", "Operation"))
+        self.assertEqual(detail_rows(state), [("2", "op-a"), ("1", "op-b")])
+
+        state.switch_view()
+
+        self.assertEqual(detail_columns(state), ("Count", "Service", "Process"))
+        self.assertEqual(
+            detail_rows(state),
+            [("1", "svc-a", "proc-a"), ("1", "svc-b", "proc-b")],
+        )
+
+    def test_metadata_text_includes_report_stats(self) -> None:
+        report = _make_report()
+
+        self.assertIn("sample.log", metadata_text(report))
+        self.assertIn("events=1", metadata_text(report))
+        self.assertIn("actionable=1", metadata_text(report))
+        self.assertIn("skipped=0", metadata_text(report))
+
+    def test_process_column_width_can_grow_for_long_names(self) -> None:
+        report = AnalysisReport(
+            source_path="sample.log",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[
+                Row(
+                    name="svc",
+                    process="very-long-process-name-that-should-not-be-capped-at-forty",
+                    count=1,
+                    children=[
+                        DetailRow(
+                            name="operation",
+                            process=None,
+                            count=1,
+                        )
+                    ],
+                )
+            ],
+            inbound_rows=[
+                Row(
+                    name="op",
+                    process=None,
+                    count=1,
+                    children=[
+                        DetailRow(
+                            name="svc",
+                            process="another-very-long-process-name-used-in-detail-pane",
+                            count=1,
+                        )
+                    ],
+                )
+            ],
+        )
+        state = ReportAppState(report)
+
+        self.assertGreater(main_column_widths(state)[2], 40)
+        state.switch_view()
+        self.assertGreater(detail_column_widths(state)[2], 40)
 
 
 if __name__ == "__main__":

@@ -23,10 +23,9 @@ uv run dbuslens report
 uv run dbuslens report --input /tmp/system.pcap
 ```
 
-Keyboard controls in the TUI:
+Keyboard controls in the Textual UI:
 
-- `j` / `k` or arrow keys: move
-- `Tab`: switch between outbound and inbound rankings
-- `Enter`: open detail view
-- `b` / `Esc`: go back
+- `Left` / `Right`: switch between `Outbound` and `Inbound`
+- `Up` / `Down`: move inside the focused pane
+- `Tab` / `Shift+Tab`: switch focus between navigation and main table
 - `q`: quit
