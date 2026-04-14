@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from dbuslens.analyzer import build_report
-from dbuslens.parser import parse_events
+from dbuslens.pcap_parser import parse_pcap_bytes
 from dbuslens.record import RecordError, build_default_output_path, record_monitor
 from dbuslens.tui import run_browser
 
@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--duration", type=int, required=True)
     record_parser.add_argument("--output")
 
-    analyze_parser = subparsers.add_parser("analyze", help="analyze a saved raw log")
+    analyze_parser = subparsers.add_parser("analyze", help="analyze a saved pcap capture")
     analyze_parser.add_argument("--input", required=True)
     analyze_parser.add_argument("--cache")
 
@@ -49,8 +49,9 @@ def _handle_record(args: argparse.Namespace) -> int:
     )
     result = record_monitor(bus=args.bus, duration=args.duration, output_path=output_path)
     print(result.output_path)
-    if result.stderr.strip():
-        print(result.stderr.strip(), file=sys.stderr)
+    stderr_text = result.stderr.decode("utf-8", "replace").strip()
+    if stderr_text:
+        print(stderr_text, file=sys.stderr)
     return 0
 
 
@@ -58,15 +59,15 @@ def _handle_analyze(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     if not input_path.exists():
         raise ValueError(f"input file not found: {input_path}")
-    raw_text = input_path.read_text(encoding="utf-8")
-    if not raw_text.strip():
+    pcap_bytes = input_path.read_bytes()
+    if not pcap_bytes:
         raise ValueError(f"input file is empty: {input_path}")
 
-    parsed = parse_events(raw_text)
+    parsed = parse_pcap_bytes(pcap_bytes)
     report = build_report(
         parsed.events,
         source_path=str(input_path),
-        skipped_blocks=parsed.skipped_blocks,
+        skipped_blocks=parsed.skipped_packets,
     )
 
     if args.cache:

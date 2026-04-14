@@ -10,7 +10,7 @@ import subprocess
 @dataclass(frozen=True)
 class RecordResult:
     output_path: Path
-    stderr: str
+    stderr: bytes
     exit_code: int
 
 
@@ -27,7 +27,7 @@ def build_default_output_path(
     current_time = now or datetime.now()
     directory = base_dir or Path.cwd()
     stamp = current_time.strftime("%Y%m%d-%H%M%S")
-    return directory / f"dbuslens-{bus}-{stamp}.log"
+    return directory / f"dbuslens-{bus}-{stamp}.pcap"
 
 
 def record_monitor(
@@ -45,11 +45,11 @@ def record_monitor(
         raise RecordError("duration must be a positive integer")
 
     command = [monitor_path, f"--{bus}"]
+    command.append("--pcap")
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
     )
     try:
         stdout, stderr = process.communicate(timeout=duration)
@@ -64,8 +64,9 @@ def record_monitor(
         exit_code = process.returncode or 0
 
     if exit_code not in {0, -15} and not stdout:
-        raise RecordError(f"dbus-monitor exited with code {exit_code}: {stderr.strip()}")
+        stderr_text = stderr.decode("utf-8", "replace").strip()
+        raise RecordError(f"dbus-monitor exited with code {exit_code}: {stderr_text}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(stdout, encoding="utf-8")
+    output_path.write_bytes(stdout)
     return RecordResult(output_path=output_path, stderr=stderr, exit_code=exit_code)

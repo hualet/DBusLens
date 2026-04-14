@@ -16,19 +16,19 @@ class CliHelpersTests(unittest.TestCase):
             base_dir=Path("/tmp"),
         )
 
-        self.assertEqual(path, Path("/tmp/dbuslens-session-20260414-163005.log"))
+        self.assertEqual(path, Path("/tmp/dbuslens-session-20260414-163005.pcap"))
 
     def test_build_parser_defines_record_and_analyze(self) -> None:
         parser = build_parser()
 
         record_args = parser.parse_args(["record", "--bus", "session", "--duration", "10"])
-        analyze_args = parser.parse_args(["analyze", "--input", "sample.log"])
+        analyze_args = parser.parse_args(["analyze", "--input", "sample.pcap"])
 
         self.assertEqual(record_args.command, "record")
         self.assertEqual(record_args.bus, "session")
         self.assertEqual(record_args.duration, 10)
         self.assertEqual(analyze_args.command, "analyze")
-        self.assertEqual(analyze_args.input, "sample.log")
+        self.assertEqual(analyze_args.input, "sample.pcap")
 
 
 class BrowserStateTests(unittest.TestCase):

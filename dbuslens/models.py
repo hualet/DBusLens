@@ -30,7 +30,11 @@ class Event:
 @dataclass(frozen=True)
 class ParseResult:
     events: list[Event]
-    skipped_blocks: int
+    skipped_packets: int
+
+    @property
+    def skipped_blocks(self) -> int:
+        return self.skipped_packets
 
 
 @dataclass(frozen=True)

@@ -3,18 +3,24 @@ DBusLens is a traffic monitoring and analysis tool for D-Bus. It helps developer
 
 ## MVP Usage
 
-Record a fixed-duration raw log:
+Create the environment and install dependencies:
 
 ```bash
-python -m dbuslens record --bus session --duration 10
-python -m dbuslens record --bus system --duration 60 --output /tmp/system.log
+uv sync
 ```
 
-Analyze a saved log and open the terminal UI:
+Record a fixed-duration `.pcap` capture:
 
 ```bash
-python -m dbuslens analyze --input /tmp/system.log
-python -m dbuslens analyze --input /tmp/system.log --cache /tmp/system.json
+uv run dbuslens record --bus session --duration 10
+uv run dbuslens record --bus system --duration 60 --output /tmp/system.pcap
+```
+
+Analyze a saved `.pcap` and open the terminal UI:
+
+```bash
+uv run dbuslens analyze --input /tmp/system.pcap
+uv run dbuslens analyze --input /tmp/system.pcap --cache /tmp/system.json
 ```
 
 Keyboard controls in the TUI:

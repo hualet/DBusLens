@@ -1,0 +1,11 @@
+[project]
+name = "dbuslens"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "dbus-fast>=4.0.4",
+    "dpkt>=1.9.8",
+]
+
+[project.scripts]
+dbuslens = "dbuslens.cli:main"

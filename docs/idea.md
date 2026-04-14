@@ -24,8 +24,10 @@
 
 ## 技术
 
-- python + dbus-monitor
+- python + dbus-monitor `--pcap`
 - 可参考 dbus bustle 的技术方案
+- 默认采集格式直接使用 `pcap`，不再保留文本日志模式
+- 如果后续需要调试，再补一个针对 `pcap` 的解析/展示工具
 
 
 
@@ -35,6 +37,6 @@
 - [ ] 命令行补全、man 文档、中英文支持
 - [ ] 打包 deb 
 - [ ] 可以通过更直观的图来展示分析结果
-
-
+- [ ] 支持 `method_call -> method_return/error` 配对，展示高累计耗时和高均值耗时热点
+- [ ] 支持把 `:1.xxx` 这类唯一名映射成更可读的 well-known name 或进程信息
 
