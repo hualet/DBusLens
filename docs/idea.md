@@ -33,7 +33,7 @@
 
 ## 未来
 
-- [ ] 命令行参数，默认值设定 --bus 默认 session 
+- [x] 命令行参数，默认值设定 --bus 默认 session  --input/output 默认 record.cap
 - [ ] 命令行补全、man 文档、中英文支持
 - [ ] 打包 deb 
 - [ ] 可以通过更直观的图来展示分析结果
