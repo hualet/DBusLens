@@ -4,8 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Label, ListItem, ListView, Static
 
-from dbuslens.models import AnalysisReport, DetailRow, Row
-from dbuslens.report_app import ReportAppState, main_columns
+from dbuslens.models import AnalysisReport
+from dbuslens.report_app import ReportAppState, detail_lines, main_columns, main_rows
 
 
 class DBusLensReportApp(App[None]):
@@ -72,46 +72,12 @@ class DBusLensReportApp(App[None]):
         if table.columns:
             table.clear(columns=True)
         table.add_columns(*columns)
-        for row in self._main_rows():
+        for row in main_rows(self.state):
             table.add_row(*row)
 
     def _populate_detail_pane(self) -> None:
         detail = self.query_one("#detail-pane", Static)
-        current = self.state.current_row
-        if current is None:
-            detail.update("No detail available.")
-            return
-
-        lines = [f"Selected: {current.name}", f"Count: {current.count}"]
-        if current.process:
-            lines.append(f"Process: {current.process}")
-        if current.children:
-            child = current.children[0]
-            lines.append(f"First detail: {self._detail_summary(child)}")
-        else:
-            lines.append("No child entries.")
-        detail.update("\n".join(lines))
-
-    def _main_rows(self) -> list[tuple[str, ...]]:
-        rows = self._current_rows()
-        if self.state.active_view == "outbound":
-            return [
-                (str(row.count), row.name, row.process or "-")
-                for row in rows
-            ]
-        return [(str(row.count), row.name) for row in rows]
-
-    def _current_rows(self) -> list[Row]:
-        return (
-            self.report.outbound_rows
-            if self.state.active_view == "outbound"
-            else self.report.inbound_rows
-        )
-
-    def _detail_summary(self, row: DetailRow) -> str:
-        if row.process:
-            return f"{row.name} ({row.process}) x{row.count}"
-        return f"{row.name} x{row.count}"
+        detail.update("\n".join(detail_lines(self.state)))
 
 
 def run_browser(report: AnalysisReport) -> None:

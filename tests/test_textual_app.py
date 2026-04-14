@@ -1,7 +1,7 @@
 import unittest
 
 from dbuslens.models import AnalysisReport, DetailRow, Row
-from dbuslens.report_app import ReportAppState, main_columns
+from dbuslens.report_app import ReportAppState, detail_lines, main_columns, main_rows
 
 
 def _make_report() -> AnalysisReport:
@@ -61,6 +61,33 @@ class ReportAppStateTests(unittest.TestCase):
                     inbound_rows=[],
                 )
             ).current_row
+        )
+
+    def test_report_app_provides_main_rows_and_detail_lines(self) -> None:
+        report = _make_report()
+        state = ReportAppState(report)
+
+        self.assertEqual(main_rows(state), [("1", "svc", "demo")])
+        self.assertEqual(
+            detail_lines(state),
+            [
+                "Selected: svc",
+                "Count: 1",
+                "Process: demo",
+                "First detail: op x1",
+            ],
+        )
+
+        state.switch_view()
+
+        self.assertEqual(main_rows(state), [("1", "op")])
+        self.assertEqual(
+            detail_lines(state),
+            [
+                "Selected: op",
+                "Count: 1",
+                "First detail: svc (demo) x1",
+            ],
         )
 
 

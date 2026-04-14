@@ -1,14 +1,13 @@
-import asyncio
 import unittest
 
-from textual.widgets import DataTable, ListView, Static
+from textual.widgets import DataTable, Footer, Header, ListView, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, Row
 from dbuslens.tui import DBusLensReportApp
 
 
-class TextualLayoutTests(unittest.TestCase):
-    def test_textual_ui_defines_navigation_main_and_detail_regions(self) -> None:
+class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
+    async def test_textual_ui_defines_navigation_main_and_detail_regions(self) -> None:
         report = AnalysisReport(
             source_path="record.cap",
             total_events=2,
@@ -31,16 +30,14 @@ class TextualLayoutTests(unittest.TestCase):
                 )
             ],
         )
+        app = DBusLensReportApp(report)
 
-        async def assert_regions() -> None:
-            app = DBusLensReportApp(report)
-
-            async with app.run_test():
-                self.assertIsInstance(app.query_one("#view-nav"), ListView)
-                self.assertIsInstance(app.query_one("#main-table"), DataTable)
-                self.assertIsInstance(app.query_one("#detail-pane"), Static)
-
-        asyncio.run(assert_regions())
+        async with app.run_test():
+            self.assertIsInstance(app.query_one(Header), Header)
+            self.assertIsInstance(app.query_one("#view-nav"), ListView)
+            self.assertIsInstance(app.query_one("#main-table"), DataTable)
+            self.assertIsInstance(app.query_one("#detail-pane"), Static)
+            self.assertIsInstance(app.query_one(Footer), Footer)
 
 
 if __name__ == "__main__":
