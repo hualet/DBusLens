@@ -38,10 +38,18 @@ class ParseResult:
 
 
 @dataclass(frozen=True)
+class DetailRow:
+    name: str
+    process: str | None
+    count: int
+
+
+@dataclass(frozen=True)
 class Row:
     name: str
+    process: str | None
     count: int
-    children: list[tuple[str, int]]
+    children: list[DetailRow]
 
 
 @dataclass(frozen=True)

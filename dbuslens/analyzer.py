@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from typing import Callable
 
-from dbuslens.models import AnalysisReport, Event, Row
+from dbuslens.models import AnalysisReport, DetailRow, Event, Row
+from dbuslens.processes import resolve_process_name
 
 
 ACTIONABLE_TYPES = {"method_call", "signal"}
@@ -13,6 +15,7 @@ def build_report(
     *,
     source_path: str = "<memory>",
     skipped_blocks: int = 0,
+    resolve_process: Callable[[str], str | None] = resolve_process_name,
 ) -> AnalysisReport:
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
@@ -36,17 +39,36 @@ def build_report(
         total_events=len(events),
         actionable_events=actionable_events,
         skipped_blocks=skipped_blocks,
-        outbound_rows=_build_rows(outbound_totals, outbound_children),
-        inbound_rows=_build_rows(inbound_totals, inbound_children),
+        outbound_rows=_build_rows(outbound_totals, outbound_children, resolve_process),
+        inbound_rows=_build_rows(inbound_totals, inbound_children, resolve_process),
     )
 
 
 def _build_rows(
     totals: Counter[str],
     children: dict[str, Counter[str]],
+    resolve_process: Callable[[str], str | None],
 ) -> list[Row]:
     rows = []
     for name, count in sorted(totals.items(), key=lambda item: (-item[1], item[0])):
         child_rows = sorted(children[name].items(), key=lambda item: (-item[1], item[0]))
-        rows.append(Row(name=name, count=count, children=child_rows))
+        rows.append(
+            Row(
+                name=name,
+                process=resolve_process(name) if _looks_like_service(name) else None,
+                count=count,
+                children=[
+                    DetailRow(
+                        name=child_name,
+                        process=resolve_process(child_name) if _looks_like_service(child_name) else None,
+                        count=child_count,
+                    )
+                    for child_name, child_count in child_rows
+                ],
+            )
+        )
     return rows
+
+
+def _looks_like_service(name: str) -> bool:
+    return bool(name) and (name.startswith(":") or "." in name or name == "<unknown>")

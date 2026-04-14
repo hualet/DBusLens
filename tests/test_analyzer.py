@@ -57,19 +57,27 @@ class BuildReportTests(unittest.TestCase):
             ),
         ]
 
-        report = build_report(events)
+        report = build_report(
+            events,
+            resolve_process=lambda service: {
+                ":1.10": "demo-client",
+                "org.example.Service": "demo-service",
+            }.get(service),
+        )
 
         self.assertEqual(report.total_events, 4)
         self.assertEqual(report.actionable_events, 3)
         self.assertEqual(report.outbound_rows[0].name, ":1.10")
+        self.assertEqual(report.outbound_rows[0].process, "demo-client")
         self.assertEqual(report.outbound_rows[0].count, 2)
         self.assertEqual(
-            report.outbound_rows[0].children[0],
-            ("org.example.Demo.Ping", 2),
+            report.outbound_rows[0].children[0].name,
+            "org.example.Demo.Ping",
         )
         self.assertEqual(report.inbound_rows[0].name, "org.example.Demo.Ping")
         self.assertEqual(report.inbound_rows[0].count, 2)
-        self.assertEqual(report.inbound_rows[0].children[0], (":1.10", 2))
+        self.assertEqual(report.inbound_rows[0].children[0].name, ":1.10")
+        self.assertEqual(report.inbound_rows[0].children[0].process, "demo-client")
 
     def test_build_report_uses_fallback_labels(self) -> None:
         events = [
@@ -91,6 +99,7 @@ class BuildReportTests(unittest.TestCase):
 
         self.assertEqual(report.outbound_rows[0].name, "<unknown>")
         self.assertEqual(report.inbound_rows[0].name, "<unknown>")
+        self.assertIsNone(report.outbound_rows[0].process)
 
 
 if __name__ == "__main__":

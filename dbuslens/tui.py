@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import curses
 
-from dbuslens.models import AnalysisReport, Row
+from dbuslens.models import AnalysisReport, DetailRow, Row
 
 
 class BrowserState:
@@ -92,12 +92,14 @@ def _draw(stdscr: curses.window, state: BrowserState) -> None:
         if not rows:
             stdscr.addnstr(4, 0, "No actionable messages found.", width - 1)
         else:
+            table_header, table_rows = build_table(state, width)
+            stdscr.addnstr(4, 0, table_header, width - 1, curses.A_BOLD)
             _draw_list(
                 stdscr,
-                start_y=4,
+                start_y=5,
                 width=width,
-                height=height - 6,
-                rows=[f"{row.count:>6}  {row.name}" for row in rows],
+                height=height - 7,
+                rows=table_rows,
                 selected_index=state.selected_index,
             )
     else:
@@ -110,12 +112,14 @@ def _draw(stdscr: curses.window, state: BrowserState) -> None:
         if not state.detail_row.children:
             stdscr.addnstr(4, 0, "No child entries.", width - 1)
         else:
+            table_header, table_rows = build_table(state, width)
+            stdscr.addnstr(4, 0, table_header, width - 1, curses.A_BOLD)
             _draw_list(
                 stdscr,
-                start_y=4,
+                start_y=5,
                 width=width,
-                height=height - 6,
-                rows=[f"{count:>6}  {name}" for name, count in state.detail_row.children],
+                height=height - 7,
+                rows=table_rows,
                 selected_index=state.detail_index,
             )
 
@@ -145,3 +149,72 @@ def _draw_list(
             break
         attr = curses.A_REVERSE if top + offset == selected_index else curses.A_NORMAL
         stdscr.addnstr(y, 0, text, width - 1, attr)
+
+
+def build_table(state: BrowserState, width: int) -> tuple[str, list[str]]:
+    if state.detail_row is None:
+        if state.active_view == "outbound":
+            return _format_service_rows(state.current_rows, width)
+        return _format_operation_rows(state.current_rows, width)
+
+    if state.active_view == "outbound":
+        return _format_detail_rows(state.detail_row.children, width, show_process=False)
+    return _format_detail_rows(state.detail_row.children, width, show_process=True)
+
+
+def _format_service_rows(rows: list[Row], width: int) -> tuple[str, list[str]]:
+    count_w = 8
+    service_w = max(20, min(36, width - count_w - 18))
+    process_w = max(10, width - count_w - service_w - 4)
+    header = f"{'COUNT':>{count_w}}  {_trim('SERVICE', service_w):<{service_w}}  {_trim('PROCESS', process_w):<{process_w}}"
+    body = [
+        f"{row.count:>{count_w}}  {_trim(row.name, service_w):<{service_w}}  {_trim(row.process or '-', process_w):<{process_w}}"
+        for row in rows
+    ]
+    return header, body
+
+
+def _format_operation_rows(rows: list[Row], width: int) -> tuple[str, list[str]]:
+    count_w = 8
+    operation_w = max(20, width - count_w - 2)
+    header = f"{'COUNT':>{count_w}}  {_trim('OPERATION', operation_w):<{operation_w}}"
+    body = [
+        f"{row.count:>{count_w}}  {_trim(row.name, operation_w):<{operation_w}}"
+        for row in rows
+    ]
+    return header, body
+
+
+def _format_detail_rows(
+    rows: list[DetailRow],
+    width: int,
+    *,
+    show_process: bool,
+) -> tuple[str, list[str]]:
+    if not show_process:
+        count_w = 8
+        name_w = max(20, width - count_w - 2)
+        header = f"{'COUNT':>{count_w}}  {_trim('OPERATION', name_w):<{name_w}}"
+        body = [
+            f"{row.count:>{count_w}}  {_trim(row.name, name_w):<{name_w}}"
+            for row in rows
+        ]
+        return header, body
+
+    count_w = 8
+    service_w = max(20, min(36, width - count_w - 18))
+    process_w = max(10, width - count_w - service_w - 4)
+    header = f"{'COUNT':>{count_w}}  {_trim('SERVICE', service_w):<{service_w}}  {_trim('PROCESS', process_w):<{process_w}}"
+    body = [
+        f"{row.count:>{count_w}}  {_trim(row.name, service_w):<{service_w}}  {_trim(row.process or '-', process_w):<{process_w}}"
+        for row in rows
+    ]
+    return header, body
+
+
+def _trim(text: str, width: int) -> str:
+    if len(text) <= width:
+        return text
+    if width <= 1:
+        return text[:width]
+    return text[: width - 1] + "…"

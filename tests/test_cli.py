@@ -5,7 +5,7 @@ from pathlib import Path
 from dbuslens.cli import build_parser
 from dbuslens.record import build_default_output_path
 from dbuslens.tui import BrowserState
-from dbuslens.models import AnalysisReport, Row
+from dbuslens.models import AnalysisReport, DetailRow, Row
 
 
 class CliHelpersTests(unittest.TestCase):
@@ -39,8 +39,22 @@ class BrowserStateTests(unittest.TestCase):
             total_events=1,
             actionable_events=1,
             skipped_blocks=0,
-            outbound_rows=[Row(name="svc", count=1, children=[("op", 1)])],
-            inbound_rows=[Row(name="op", count=1, children=[("svc", 1)])],
+            outbound_rows=[
+                Row(
+                    name="svc",
+                    process="demo",
+                    count=1,
+                    children=[DetailRow(name="op", process=None, count=1)],
+                )
+            ],
+            inbound_rows=[
+                Row(
+                    name="op",
+                    process=None,
+                    count=1,
+                    children=[DetailRow(name="svc", process="demo", count=1)],
+                )
+            ],
         )
         state = BrowserState(report)
 
