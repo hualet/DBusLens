@@ -42,6 +42,21 @@ def _make_report() -> AnalysisReport:
                 ],
             )
         ],
+        error_rows=[
+            Row(
+                name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                process=None,
+                count=1,
+                children=[
+                    DetailRow(
+                        name="svc",
+                        process=ProcessInfo(short_name="demo", pid=4321),
+                        count=1,
+                        secondary="org.freedesktop.DBus.GetNameOwner",
+                    )
+                ],
+            )
+        ],
     )
 
 
@@ -61,6 +76,12 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(state.current_row.name, "op")
         self.assertEqual(main_columns(state), ("Count", "Operation"))
 
+        state.set_view("errors")
+
+        self.assertEqual(state.active_view, "errors")
+        self.assertEqual(state.current_row.name, "org.freedesktop.DBus.Error.NameHasNoOwner")
+        self.assertEqual(main_columns(state), ("Count", "Error"))
+
     def test_current_row_returns_none_for_empty_or_out_of_range_selection(self) -> None:
         report = _make_report()
 
@@ -75,6 +96,7 @@ class ReportAppStateTests(unittest.TestCase):
                     skipped_blocks=0,
                     outbound_rows=[],
                     inbound_rows=[],
+                    error_rows=[],
                 )
             ).current_row
         )
@@ -102,6 +124,18 @@ class ReportAppStateTests(unittest.TestCase):
             detail_lines(state),
             [
                 "Selected: op",
+                "Count: 1",
+                "Details: 1 row(s)",
+            ],
+        )
+
+        state.set_view("errors")
+
+        self.assertEqual(main_rows(state), [("1", "org.freedesktop.DBus.Error.NameHasNoOwner")])
+        self.assertEqual(
+            detail_lines(state),
+            [
+                "Selected: org.freedesktop.DBus.Error.NameHasNoOwner",
                 "Count: 1",
                 "Details: 1 row(s)",
             ],
@@ -143,6 +177,27 @@ class ReportAppStateTests(unittest.TestCase):
                     ],
                 )
             ],
+            error_rows=[
+                Row(
+                    name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                    process=None,
+                    count=2,
+                    children=[
+                        DetailRow(
+                            name="svc-a",
+                            process=ProcessInfo(short_name="proc-a", pid=1001),
+                            count=1,
+                            secondary="org.freedesktop.DBus.GetNameOwner",
+                        ),
+                        DetailRow(
+                            name="svc-b",
+                            process=ProcessInfo(short_name="proc-b", pid=1002),
+                            count=1,
+                            secondary="org.freedesktop.DBus.GetConnectionUnixProcessID",
+                        ),
+                    ],
+                )
+            ],
         )
         state = ReportAppState(report)
 
@@ -155,6 +210,17 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(
             detail_rows(state),
             [("1", "svc-a", "proc-a [1001]"), ("1", "svc-b", "proc-b [1002]")],
+        )
+
+        state.set_view("errors")
+
+        self.assertEqual(detail_columns(state), ("Count", "Service", "Process", "Operation"))
+        self.assertEqual(
+            detail_rows(state),
+            [
+                ("1", "svc-a", "proc-a [1001]", "org.freedesktop.DBus.GetNameOwner"),
+                ("1", "svc-b", "proc-b [1002]", "org.freedesktop.DBus.GetConnectionUnixProcessID"),
+            ],
         )
 
     def test_metadata_text_includes_report_stats(self) -> None:
@@ -205,6 +271,7 @@ class ReportAppStateTests(unittest.TestCase):
                     ],
                 )
             ],
+            error_rows=[],
         )
         state = ReportAppState(report)
 

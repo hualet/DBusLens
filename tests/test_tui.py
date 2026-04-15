@@ -34,6 +34,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             skipped_blocks=0,
             outbound_rows=[],
             inbound_rows=[],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -65,6 +66,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ],
             inbound_rows=[],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -98,6 +100,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
                 )
             ],
             inbound_rows=[],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -137,6 +140,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
                     ],
                 )
             ],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -159,6 +163,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             skipped_blocks=0,
             outbound_rows=[],
             inbound_rows=[],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -166,6 +171,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             labels = [str(label.render()) for label in app.query("#view-nav Label")]
             self.assertIn("Senders", labels)
             self.assertIn("Members", labels)
+            self.assertIn("Errors", labels)
 
     async def test_textual_ui_sets_panel_border_titles(self) -> None:
         report = AnalysisReport(
@@ -175,6 +181,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             skipped_blocks=0,
             outbound_rows=[],
             inbound_rows=[],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 
@@ -183,6 +190,44 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
             self.assertEqual(app.query_one("#detail-pane", Static).border_title, " selected ")
             self.assertEqual(app.query_one("#detail-table", DataTable).border_title, " members ")
+
+    async def test_textual_ui_supports_errors_view(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=2,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+            error_rows=[
+                Row(
+                    name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                    process=None,
+                    count=1,
+                    children=[
+                        DetailRow(
+                            name=":1.10",
+                            process=ProcessInfo(short_name="demo-client", pid=1010),
+                            count=1,
+                            secondary="org.freedesktop.DBus.GetNameOwner",
+                        )
+                    ],
+                )
+            ],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            await pilot.pause()
+
+            main_table = app.query_one("#main-table", DataTable)
+            detail_table = app.query_one("#detail-table", DataTable)
+
+            self.assertEqual(app.state.active_view, "errors")
+            self.assertEqual(main_table.border_title, " errors ")
+            self.assertEqual(detail_table.border_title, " details ")
+            self.assertEqual(detail_table.row_count, 1)
 
 
 if __name__ == "__main__":

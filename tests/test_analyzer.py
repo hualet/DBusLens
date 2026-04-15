@@ -107,6 +107,53 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(report.inbound_rows[0].name, "<unknown>")
         self.assertIsNone(report.outbound_rows[0].process)
 
+    def test_build_report_groups_errors_by_name_and_origin(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.freedesktop.DBus",
+                path="/org/freedesktop/DBus",
+                interface="org.freedesktop.DBus",
+                member="GetNameOwner",
+                serial=7,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.0,
+                message_type="error",
+                sender="org.freedesktop.DBus",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=8,
+                reply_serial=7,
+                error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            resolve_process=lambda service: {
+                ":1.10": ProcessInfo(short_name="demo-client", pid=1010),
+            }.get(service),
+        )
+
+        self.assertEqual(report.error_rows[0].name, "org.freedesktop.DBus.Error.NameHasNoOwner")
+        self.assertEqual(report.error_rows[0].count, 1)
+        self.assertEqual(report.error_rows[0].children[0].name, ":1.10")
+        self.assertEqual(
+            report.error_rows[0].children[0].process,
+            ProcessInfo(short_name="demo-client", pid=1010),
+        )
+        self.assertEqual(
+            report.error_rows[0].children[0].secondary,
+            "org.freedesktop.DBus.GetNameOwner",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

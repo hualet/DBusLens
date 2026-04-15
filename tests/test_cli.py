@@ -61,6 +61,7 @@ class ReportAppConstructionTests(unittest.TestCase):
                     ],
                 )
             ],
+            error_rows=[],
         )
         app = DBusLensReportApp(report)
 

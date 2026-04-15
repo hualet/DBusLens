@@ -54,6 +54,7 @@ class DetailRow:
     name: str
     process: ProcessInfo | None
     count: int
+    secondary: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class AnalysisReport:
     skipped_blocks: int
     outbound_rows: list[Row]
     inbound_rows: list[Row]
+    error_rows: list[Row]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -81,4 +83,5 @@ class AnalysisReport:
             "skipped_blocks": self.skipped_blocks,
             "outbound_rows": [asdict(row) for row in self.outbound_rows],
             "inbound_rows": [asdict(row) for row in self.inbound_rows],
+            "error_rows": [asdict(row) for row in self.error_rows],
         }

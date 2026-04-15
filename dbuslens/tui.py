@@ -26,6 +26,7 @@ class DBusLensReportApp(App[None]):
     BINDINGS = [
         ("left", "show_outbound", "Senders"),
         ("right", "show_inbound", "Members"),
+        ("e", "show_errors", "Errors"),
         ("tab", "focus_next_pane", "Next Pane"),
         ("shift+tab", "focus_previous_pane", "Prev Pane"),
         ("enter", "focus_detail_pane", "Detail Pane"),
@@ -186,6 +187,7 @@ class DBusLensReportApp(App[None]):
             yield ListView(
                 ListItem(Label("Senders")),
                 ListItem(Label("Members")),
+                ListItem(Label("Errors")),
                 id="view-nav",
             )
             yield DataTable(id="main-table")
@@ -222,11 +224,15 @@ class DBusLensReportApp(App[None]):
 
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
-        nav.index = 0 if self.state.active_view == "outbound" else 1
+        nav.index = {"outbound": 0, "inbound": 1, "errors": 2}[self.state.active_view]
 
     def _populate_main_table(self) -> None:
         table = self.query_one("#main-table", DataTable)
-        table.border_title = " senders " if self.state.active_view == "outbound" else " members "
+        table.border_title = {
+            "outbound": " senders ",
+            "inbound": " members ",
+            "errors": " errors ",
+        }[self.state.active_view]
         table.cursor_type = "row"
         table.zebra_stripes = True
         if table.columns:
@@ -241,7 +247,11 @@ class DBusLensReportApp(App[None]):
     def refresh_detail(self) -> None:
         self.query_one("#detail-pane", Static).update("\n".join(detail_lines(self.state)))
         table = self.query_one("#detail-table", DataTable)
-        table.border_title = " members " if self.state.active_view == "outbound" else " senders "
+        table.border_title = {
+            "outbound": " members ",
+            "inbound": " senders ",
+            "errors": " details ",
+        }[self.state.active_view]
         table.cursor_type = "row"
         table.zebra_stripes = True
         if table.columns:
@@ -253,12 +263,17 @@ class DBusLensReportApp(App[None]):
 
     def action_show_outbound(self) -> None:
         if self.state.active_view != "outbound":
-            self.state.switch_view()
+            self.state.set_view("outbound")
             self._sync_view()
 
     def action_show_inbound(self) -> None:
         if self.state.active_view != "inbound":
-            self.state.switch_view()
+            self.state.set_view("inbound")
+            self._sync_view()
+
+    def action_show_errors(self) -> None:
+        if self.state.active_view != "errors":
+            self.state.set_view("errors")
             self._sync_view()
 
     def action_focus_next_pane(self) -> None:
@@ -287,10 +302,10 @@ class DBusLensReportApp(App[None]):
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.list_view.id != "view-nav" or event.list_view.index is None:
             return
-        desired_view = "outbound" if event.list_view.index == 0 else "inbound"
+        desired_view = {0: "outbound", 1: "inbound", 2: "errors"}[event.list_view.index]
         if desired_view == self.state.active_view:
             return
-        self.state.switch_view()
+        self.state.set_view(desired_view)
         self._sync_view()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -398,15 +413,21 @@ class DBusLensLoaderApp(App[AnalysisReport | Exception | None]):
         try:
             report = load_report(
                 self.input_path,
-                progress_callback=lambda update: self.call_from_thread(
+                progress_callback=lambda update: self._call_on_ui(
                     self._apply_progress,
                     update,
                 ),
             )
         except Exception as exc:
-            self.call_from_thread(self.exit, exc)
+            self._call_on_ui(self.exit, exc)
             return
-        self.call_from_thread(self.exit, report)
+        self._call_on_ui(self.exit, report)
+
+    def _call_on_ui(self, callback, *args) -> None:
+        try:
+            self.call_from_thread(callback, *args)
+        except Exception:
+            return
 
     def _apply_progress(self, update: LoadingUpdate) -> None:
         self.query_one("#loading-status", Static).update(

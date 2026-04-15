@@ -20,12 +20,33 @@ def build_report(
 ) -> AnalysisReport:
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
+    error_totals: Counter[str] = Counter()
     outbound_children: dict[str, Counter[str]] = defaultdict(Counter)
     inbound_children: dict[str, Counter[str]] = defaultdict(Counter)
+    error_children: dict[str, Counter[tuple[str, str]]] = defaultdict(Counter)
+    call_index: dict[tuple[str | None, str | None, int], Event] = {}
 
     actionable_events = 0
     total_events = len(events)
     for index, event in enumerate(events, start=1):
+        if event.message_type == "method_call" and event.serial is not None:
+            call_index[(event.sender, event.destination, event.serial)] = event
+
+        if event.message_type == "error":
+            error_name = event.error_name or "<unknown>"
+            original = None
+            if event.reply_serial is not None:
+                original = call_index.get((event.destination, event.sender, event.reply_serial))
+            service_name = (
+                original.sender if original and original.sender else event.destination or "<unknown>"
+            )
+            operation_name = original.operation if original else "<unknown>"
+            error_totals[error_name] += 1
+            error_children[error_name][(service_name, operation_name)] += 1
+            if progress_callback:
+                progress_callback(index, total_events)
+            continue
+
         if event.message_type not in ACTIONABLE_TYPES:
             if progress_callback:
                 progress_callback(index, total_events)
@@ -50,6 +71,7 @@ def build_report(
         skipped_blocks=skipped_blocks,
         outbound_rows=_build_rows(outbound_totals, outbound_children, resolve_process),
         inbound_rows=_build_rows(inbound_totals, inbound_children, resolve_process),
+        error_rows=_build_error_rows(error_totals, error_children, resolve_process),
     )
 
 
@@ -81,3 +103,33 @@ def _build_rows(
 
 def _looks_like_service(name: str) -> bool:
     return bool(name) and (name.startswith(":") or "." in name or name == "<unknown>")
+
+
+def _build_error_rows(
+    totals: Counter[str],
+    children: dict[str, Counter[tuple[str, str]]],
+    resolve_process: Callable[[str], ProcessInfo | None],
+) -> list[Row]:
+    rows = []
+    for name, count in sorted(totals.items(), key=lambda item: (-item[1], item[0])):
+        child_rows = sorted(
+            children[name].items(),
+            key=lambda item: (-item[1], item[0][0], item[0][1]),
+        )
+        rows.append(
+            Row(
+                name=name,
+                process=None,
+                count=count,
+                children=[
+                    DetailRow(
+                        name=service_name,
+                        process=resolve_process(service_name) if _looks_like_service(service_name) else None,
+                        count=child_count,
+                        secondary=operation_name,
+                    )
+                    for (service_name, operation_name), child_count in child_rows
+                ],
+            )
+        )
+    return rows

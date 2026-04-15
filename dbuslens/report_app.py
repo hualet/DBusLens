@@ -15,12 +15,18 @@ class ReportAppState:
         self.active_view = "inbound" if self.active_view == "outbound" else "outbound"
         self.selected_index = 0
 
+    def set_view(self, view: str) -> None:
+        self.active_view = view
+        self.selected_index = 0
+
     @property
     def current_row(self) -> Row | None:
         rows = (
             self.report.outbound_rows
             if self.active_view == "outbound"
             else self.report.inbound_rows
+            if self.active_view == "inbound"
+            else self.report.error_rows
         )
         if self.selected_index < 0 or self.selected_index >= len(rows):
             return None
@@ -28,7 +34,11 @@ class ReportAppState:
 
 
 def main_columns(state: ReportAppState) -> tuple[str, ...]:
-    return ("Count", "Service", "Process") if state.active_view == "outbound" else ("Count", "Operation")
+    if state.active_view == "outbound":
+        return ("Count", "Service", "Process")
+    if state.active_view == "inbound":
+        return ("Count", "Operation")
+    return ("Count", "Error")
 
 
 def current_rows(state: ReportAppState) -> list[Row]:
@@ -36,6 +46,8 @@ def current_rows(state: ReportAppState) -> list[Row]:
         state.report.outbound_rows
         if state.active_view == "outbound"
         else state.report.inbound_rows
+        if state.active_view == "inbound"
+        else state.report.error_rows
     )
 
 
@@ -46,6 +58,8 @@ def main_rows(state: ReportAppState) -> list[tuple[str, ...]]:
             (str(row.count), row.name, row.process.display_name if row.process else "-")
             for row in rows
         ]
+    if state.active_view == "errors":
+        return [(str(row.count), row.name) for row in rows]
     return [(str(row.count), row.name) for row in rows]
 
 
@@ -56,6 +70,11 @@ def main_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
             8,
             _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
             _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
+        )
+    if state.active_view == "errors":
+        return (
+            8,
+            _width_for_column(("Error",), rows, 1, minimum=28, maximum=72),
         )
     return (
         8,
@@ -83,7 +102,9 @@ def detail_lines(state: ReportAppState) -> list[str]:
 def detail_columns(state: ReportAppState) -> tuple[str, ...]:
     if state.active_view == "outbound":
         return ("Count", "Operation")
-    return ("Count", "Service", "Process")
+    if state.active_view == "inbound":
+        return ("Count", "Service", "Process")
+    return ("Count", "Service", "Process", "Operation")
 
 
 def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
@@ -92,6 +113,16 @@ def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
         return []
     if state.active_view == "outbound":
         return [(str(row.count), row.name) for row in current.children]
+    if state.active_view == "errors":
+        return [
+            (
+                str(row.count),
+                row.name,
+                row.process.display_name if row.process else "-",
+                row.secondary or "<unknown>",
+            )
+            for row in current.children
+        ]
     return [
         (str(row.count), row.name, row.process.display_name if row.process else "-")
         for row in current.children
@@ -104,6 +135,13 @@ def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
         return (
             8,
             _width_for_column(("Operation",), rows, 1, minimum=24, maximum=96),
+        )
+    if state.active_view == "errors":
+        return (
+            8,
+            _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
+            _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
+            _width_for_column(("Operation",), rows, 3, minimum=24, maximum=96),
         )
     return (
         8,
