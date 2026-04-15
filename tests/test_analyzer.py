@@ -5,6 +5,59 @@ from dbuslens.models import Event, ProcessInfo
 
 
 class BuildReportTests(unittest.TestCase):
+    def test_build_report_prefers_well_known_names_for_same_process(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="signal",
+                sender=":1.10",
+                destination=None,
+                path="/org/example/Service",
+                interface="org.example.Service",
+                member="Changed",
+                serial=1,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.0,
+                message_type="method_call",
+                sender=":1.11",
+                destination="org.example.Service",
+                path="/org/example/Service",
+                interface="org.example.Service",
+                member="Ping",
+                serial=2,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=3.0,
+                message_type="method_call",
+                sender=":1.11",
+                destination=":1.10",
+                path="/org/example/Service",
+                interface="org.example.Service",
+                member="Ping",
+                serial=3,
+                reply_serial=None,
+                error_name=None,
+            ),
+        ]
+
+        report = build_report(
+            events,
+            resolve_process=lambda service: {
+                ":1.10": ProcessInfo(short_name="demo-service", pid=2020),
+                "org.example.Service": ProcessInfo(short_name="demo-service", pid=2020),
+                ":1.11": ProcessInfo(short_name="demo-client", pid=1010),
+            }.get(service),
+        )
+
+        self.assertEqual(report.outbound_rows[0].name, ":1.11")
+        self.assertEqual(report.outbound_rows[1].name, "org.example.Service")
+        self.assertEqual(report.inbound_rows[1].children[0].name, "org.example.Service")
+
     def test_build_report_groups_outbound_and_inbound_counts(self) -> None:
         events = [
             Event(

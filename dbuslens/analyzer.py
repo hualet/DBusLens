@@ -18,6 +18,7 @@ def build_report(
     resolve_process: Callable[[str], ProcessInfo | None] = resolve_process_name,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> AnalysisReport:
+    service_name_for = _build_service_name_resolver(events, resolve_process)
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
     error_totals: Counter[str] = Counter()
@@ -37,7 +38,7 @@ def build_report(
             original = None
             if event.reply_serial is not None:
                 original = call_index.get((event.destination, event.sender, event.reply_serial))
-            service_name = (
+            service_name = service_name_for(
                 original.sender if original and original.sender else event.destination or "<unknown>"
             )
             operation_name = original.operation if original else "<unknown>"
@@ -52,7 +53,7 @@ def build_report(
                 progress_callback(index, total_events)
             continue
         actionable_events += 1
-        service_name = event.sender or "<unknown>"
+        service_name = service_name_for(event.sender or "<unknown>")
         operation_name = event.operation
         outbound_totals[service_name] += 1
         outbound_children[service_name][operation_name] += 1
@@ -99,6 +100,48 @@ def _build_rows(
             )
         )
     return rows
+
+
+def _build_service_name_resolver(
+    events: list[Event],
+    resolve_process: Callable[[str], ProcessInfo | None],
+) -> Callable[[str], str]:
+    process_cache: dict[str, ProcessInfo | None] = {}
+
+    def cached_process(name: str) -> ProcessInfo | None:
+        if name not in process_cache:
+            process_cache[name] = resolve_process(name) if _looks_like_service(name) else None
+        return process_cache[name]
+
+    names = {
+        name
+        for event in events
+        for name in (event.sender, event.destination)
+        if name and _looks_like_service(name)
+    }
+    names.add("<unknown>")
+
+    names_by_pid: dict[int, set[str]] = defaultdict(set)
+    for name in names:
+        process = cached_process(name)
+        if process and process.pid is not None:
+            names_by_pid[process.pid].add(name)
+
+    preferred_by_pid = {
+        pid: min(
+            candidates,
+            key=lambda name: (name.startswith(":"), name),
+        )
+        for pid, candidates in names_by_pid.items()
+    }
+
+    def resolve_name(name: str) -> str:
+        process = cached_process(name)
+        if process is None or process.pid is None:
+            return name
+        return preferred_by_pid.get(process.pid, name)
+
+    return resolve_name
 
 
 def _looks_like_service(name: str) -> bool:
