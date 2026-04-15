@@ -57,7 +57,7 @@ Keep commits scoped to one change. Every git commit must include both:
 
 Recommended body content:
 
+- core change briefing
 - user-visible impact
-- verification commands, for example `./.venv/bin/python -m unittest discover -s tests -v`
 
 PRs should include: purpose, user-visible CLI changes, test evidence, and sample commands when behavior changes. For TUI changes, include a brief interaction summary.
