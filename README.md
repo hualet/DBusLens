@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/attachments/logo_full_size.png" alt="DBusLens logo" width="256" height="256">
+</p>
+
 # DBusLens
 
 DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It helps you capture `.pcap` traces, open them in a Textual UI, and quickly understand who is sending messages, which members are busiest, and where errors are happening.
