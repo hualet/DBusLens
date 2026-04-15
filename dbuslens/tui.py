@@ -488,7 +488,8 @@ class DBusLensLoaderApp(App[AnalysisReport | Exception | None]):
     }
 
     #loading-card {
-        width: 72;
+        width: 56;
+        height: auto;
         padding: 1 2;
         border: round #6ee7b7;
         background: #0b1017;
