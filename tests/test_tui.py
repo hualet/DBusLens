@@ -25,6 +25,12 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("DataTable > .datatable--even-row", css)
         self.assertIn("DataTable > .datatable--cursor", css)
         self.assertIn("#view-nav > ListItem.-highlight", css)
+        self.assertIn("#column-resizer", css)
+        self.assertIn("content-align: center middle", css)
+        self.assertIn("width: 1", css)
+        self.assertIn("pointer: ew-resize", css)
+        self.assertIn("#column-resizer:hover", css)
+        self.assertIn("pointer: grabbing", css)
 
     async def test_textual_ui_uses_btop_inspired_branding(self) -> None:
         report = AnalysisReport(
@@ -271,6 +277,59 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
             self.assertEqual(app.state.active_view, "outbound")
             self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
+
+    async def test_textual_ui_allows_dragging_detail_column_width(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=2,
+            actionable_events=2,
+            skipped_blocks=0,
+            outbound_rows=[
+                Row(
+                    name="org.example.Service",
+                    process=ProcessInfo(short_name="demo-service", pid=4242),
+                    count=1,
+                    children=[DetailRow(name="org.example.Method", process=None, count=1)],
+                )
+            ],
+            inbound_rows=[],
+            error_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test() as pilot:
+            await pilot.resize_terminal(120, 30)
+            await pilot.pause()
+
+            splitter = app.query_one("#column-resizer", Static)
+            detail_column = app.query_one("#detail-column")
+            before_width = detail_column.size.width
+
+            target_x = splitter.region.x - 10
+            target_y = splitter.region.y
+
+            await pilot.mouse_down("#column-resizer", offset=(0, 0))
+            await pilot.mouse_up(offset=(target_x, target_y))
+            await pilot.pause()
+
+            self.assertGreater(detail_column.size.width, before_width)
+
+    async def test_textual_ui_shows_visible_drag_handle(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+            error_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test():
+            resizer = app.query_one("#column-resizer", Static)
+
+            self.assertEqual(str(resizer.render()), "⋮")
 
 
 if __name__ == "__main__":

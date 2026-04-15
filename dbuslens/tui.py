@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import threading
+from typing import Callable
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Label, ListItem, ListView, ProgressBar, Static
@@ -22,7 +24,56 @@ from dbuslens.report_app import (
 )
 
 
+class ColumnResizer(Static):
+    def __init__(
+        self,
+        on_drag_start: Callable[[int], None],
+        on_drag_move: Callable[[int], None],
+        on_drag_end: Callable[[], None],
+    ) -> None:
+        super().__init__("⋮", id="column-resizer")
+        self._on_drag_start = on_drag_start
+        self._on_drag_move = on_drag_move
+        self._on_drag_end = on_drag_end
+        self.styles.pointer = "ew-resize"
+
+    def on_enter(self, event: events.Enter) -> None:
+        self.styles.pointer = "ew-resize"
+        self.screen.update_pointer_shape()
+        event.stop()
+
+    def on_leave(self, event: events.Leave) -> None:
+        if not self.has_class("dragging"):
+            self.styles.pointer = "default"
+            self.screen.update_pointer_shape()
+        event.stop()
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self.capture_mouse()
+        self.add_class("dragging")
+        self.styles.pointer = "grabbing"
+        self.screen.update_pointer_shape()
+        self._on_drag_start(event.screen_x)
+        event.stop()
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        self._on_drag_move(event.screen_x)
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        self.remove_class("dragging")
+        self.release_mouse()
+        self.styles.pointer = "ew-resize"
+        self.screen.update_pointer_shape()
+        self._on_drag_end()
+        event.stop()
+
+
 class DBusLensReportApp(App[None]):
+    VIEW_NAV_WIDTH = 24
+    RESIZER_WIDTH = 1
+    MIN_MAIN_WIDTH = 24
+    MIN_DETAIL_WIDTH = 36
+
     BINDINGS = [
         ("s", "show_outbound", "Senders"),
         ("m", "show_inbound", "Members"),
@@ -87,6 +138,26 @@ class DBusLensReportApp(App[None]):
     #detail-column {
         width: 2fr;
         min-width: 36;
+    }
+
+    #column-resizer {
+        width: 1;
+        min-width: 1;
+        content-align: center middle;
+        background: #111827;
+        color: #fcd34d;
+        text-style: bold;
+        pointer: ew-resize;
+    }
+
+    #column-resizer:hover,
+    #column-resizer.dragging {
+        background: #173b6c;
+        color: #f8fbff;
+    }
+
+    #column-resizer.dragging {
+        pointer: grabbing;
     }
 
     #detail-pane {
@@ -181,6 +252,8 @@ class DBusLensReportApp(App[None]):
         super().__init__()
         self.report = report
         self.state = ReportAppState(report)
+        self._detail_width: int | None = None
+        self._dragging_detail_width = False
 
     def compose(self) -> ComposeResult:
         yield Static(id="app-bar")
@@ -193,6 +266,11 @@ class DBusLensReportApp(App[None]):
                 id="view-nav",
             )
             yield DataTable(id="main-table")
+            yield ColumnResizer(
+                on_drag_start=self._begin_detail_resize,
+                on_drag_move=self._drag_detail_resize,
+                on_drag_end=self._end_detail_resize,
+            )
             with Vertical(id="detail-column"):
                 yield Static(id="detail-pane")
                 yield DataTable(id="detail-table")
@@ -326,6 +404,50 @@ class DBusLensReportApp(App[None]):
         self._populate_navigation()
         self._populate_main_table()
         self.refresh_detail()
+
+    def _begin_detail_resize(self, screen_x: int) -> None:
+        self._dragging_detail_width = True
+        self._drag_detail_resize(screen_x)
+
+    def _drag_detail_resize(self, screen_x: int) -> None:
+        if not self._dragging_detail_width:
+            return
+        detail_width = self._detail_width_for_screen_x(screen_x)
+        if detail_width == self._detail_width:
+            return
+        self._detail_width = detail_width
+        self._apply_detail_width()
+
+    def _end_detail_resize(self) -> None:
+        self._dragging_detail_width = False
+
+    def on_resize(self) -> None:
+        if self._detail_width is None:
+            return
+        detail_width = self._clamp_detail_width(self._detail_width)
+        if detail_width == self._detail_width:
+            return
+        self._detail_width = detail_width
+        self._apply_detail_width()
+
+    def _detail_width_for_screen_x(self, screen_x: int) -> int:
+        body = self.query_one("#body", Horizontal)
+        detail_start = screen_x + self.RESIZER_WIDTH
+        body_right = body.content_region.x + body.content_region.width
+        return self._clamp_detail_width(body_right - detail_start)
+
+    def _clamp_detail_width(self, requested_width: int) -> int:
+        body = self.query_one("#body", Horizontal)
+        available_width = (
+            body.content_region.width - self.VIEW_NAV_WIDTH - self.RESIZER_WIDTH
+        )
+        max_detail_width = max(1, available_width - self.MIN_MAIN_WIDTH)
+        min_detail_width = min(self.MIN_DETAIL_WIDTH, max_detail_width)
+        return max(min_detail_width, min(requested_width, max_detail_width))
+
+    def _apply_detail_width(self) -> None:
+        self.query_one("#detail-column", Vertical).styles.width = self._detail_width
+        self.refresh(layout=True)
 
     def _focus_navigation(self) -> None:
         self.query_one("#view-nav", ListView).focus()
