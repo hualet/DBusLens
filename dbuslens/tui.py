@@ -20,8 +20,8 @@ from dbuslens.report_app import (
 
 class DBusLensReportApp(App[None]):
     BINDINGS = [
-        ("left", "show_outbound", "Outbound"),
-        ("right", "show_inbound", "Inbound"),
+        ("left", "show_outbound", "Senders"),
+        ("right", "show_inbound", "Members"),
         ("tab", "focus_next_pane", "Next Pane"),
         ("shift+tab", "focus_previous_pane", "Prev Pane"),
         ("enter", "focus_detail_pane", "Detail Pane"),
@@ -175,8 +175,8 @@ class DBusLensReportApp(App[None]):
         yield Static(id="report-meta")
         with Horizontal(id="body"):
             yield ListView(
-                ListItem(Label("Outbound Top")),
-                ListItem(Label("Inbound Top")),
+                ListItem(Label("Senders")),
+                ListItem(Label("Members")),
                 id="view-nav",
             )
             yield DataTable(id="main-table")

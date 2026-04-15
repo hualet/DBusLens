@@ -1,7 +1,7 @@
 import unittest
 
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Footer, Header, ListView, Static
+from textual.widgets import DataTable, Footer, Header, Label, ListView, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
 from dbuslens.tui import DBusLensReportApp
@@ -140,6 +140,22 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(app.query_one("#detail-pane"), Static)
             self.assertIsInstance(app.query_one("#detail-table"), DataTable)
             self.assertIsInstance(app.query_one(Footer), Footer)
+
+    async def test_textual_ui_uses_senders_and_members_labels(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test():
+            labels = [str(label.render()) for label in app.query("#view-nav Label")]
+            self.assertIn("Senders", labels)
+            self.assertIn("Members", labels)
 
 
 if __name__ == "__main__":
