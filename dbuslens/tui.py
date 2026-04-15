@@ -31,17 +31,17 @@ class DBusLensReportApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
-        background: #091312;
-        color: #e6faf7;
+        background: #080a0f;
+        color: #d8f3dc;
     }
 
     #app-bar {
         dock: top;
         height: 3;
         padding: 0 2;
-        background: #101717;
-        color: #f4fffd;
-        border-bottom: solid #21403b;
+        background: #080a0f;
+        color: #dcefd9;
+        border-bottom: solid #6ee7b7;
         text-style: bold;
     }
 
@@ -50,9 +50,9 @@ class DBusLensReportApp(App[None]):
         height: 3;
         margin: 1 1 0 1;
         padding: 0 2;
-        background: #0f1818;
-        color: #9fc7c3;
-        border: round #24423e;
+        background: #0e1219;
+        color: #9fb3c8;
+        border: round #3b82f6;
     }
 
     #body {
@@ -64,17 +64,17 @@ class DBusLensReportApp(App[None]):
     #view-nav {
         width: 24;
         padding: 1 0;
-        border: round #275048;
-        background: #0f1b1a;
-        color: #dcf7f3;
+        border: round #a78bfa;
+        background: #0b1017;
+        color: #dcefd9;
     }
 
     #main-table {
         height: 1fr;
         width: 3fr;
-        border: round #25433f;
-        background: #0f1b1a;
-        color: #e7faf7;
+        border: round #6ee7b7;
+        background: #0b1017;
+        color: #e6f6ea;
     }
 
     #detail-column {
@@ -85,16 +85,16 @@ class DBusLensReportApp(App[None]):
     #detail-pane {
         height: 9;
         padding: 1 2;
-        border: round #235357;
-        background: #0d1717;
-        color: #d2eeeb;
+        border: round #f472b6;
+        background: #0b1017;
+        color: #e8eef8;
     }
 
     #detail-table {
         height: 1fr;
-        border: round #235357;
-        background: #0d1717;
-        color: #ecfefb;
+        border: round #f59e0b;
+        background: #0b1017;
+        color: #eef6ff;
     }
 
     DataTable {
@@ -102,66 +102,71 @@ class DBusLensReportApp(App[None]):
     }
 
     DataTable > .datatable--header {
-        background: #15312f;
-        color: #fde68a;
+        background: #12342e;
+        color: #fcd34d;
         text-style: bold;
     }
 
     DataTable > .datatable--header-cursor {
-        background: #1e413d;
-        color: #fef3b5;
+        background: #1d4d44;
+        color: #fde68a;
         text-style: bold;
     }
 
     DataTable > .datatable--odd-row {
-        background: #102725;
-        color: #e7faf7;
+        background: #0f151d;
+        color: #dcefd9;
     }
 
     DataTable > .datatable--even-row {
-        background: #0d211f;
-        color: #dbf4f0;
+        background: #0b1118;
+        color: #dcefd9;
     }
 
     DataTable > .datatable--cursor {
-        background: #19413d;
-        color: #f8fffe;
+        background: #173b6c;
+        color: #f8fbff;
         text-style: bold;
     }
 
     DataTable > .datatable--hover {
-        background: #163532;
-        color: #f0fffd;
+        background: #132432;
+        color: #f8fbff;
     }
 
     #view-nav > ListItem {
         margin: 0 1;
         padding: 0 1;
-        color: #9fc7c3;
+        color: #b8c8d8;
         background: transparent;
         border-left: tall transparent;
     }
 
-    #view-nav > ListItem.--highlight,
-    #view-nav > ListItem.--selected {
-        color: #f0fffd;
-        background: #12302d;
-        border-left: tall #34d399;
+    #view-nav > ListItem.-highlight {
+        color: #f8fbff;
+        background: #173b6c;
+        border-left: tall #fcd34d;
+        text-style: bold;
     }
 
     .pane-focus {
-        border: round #2dd4bf;
-        tint: #102624 12%;
+        border: round #fcd34d;
+        tint: #102033 6%;
     }
 
     Footer {
-        background: #0f1716;
-        color: #9dc5c1;
+        background: #080a0f;
+        color: #b8c8d8;
     }
 
     Footer > .footer--highlight {
-        background: #173331;
-        color: #fff4bf;
+        background: #16222e;
+        color: #fcd34d;
+    }
+
+    #view-nav .label,
+    #detail-pane .label {
+        color: #fcd34d;
     }
     """
 
@@ -188,6 +193,7 @@ class DBusLensReportApp(App[None]):
     def on_mount(self) -> None:
         self._populate_app_bar()
         self._populate_report_meta()
+        self._populate_panel_titles()
         self._populate_navigation()
         self._populate_main_table()
         self.refresh_detail()
@@ -195,16 +201,20 @@ class DBusLensReportApp(App[None]):
 
     def _populate_app_bar(self) -> None:
         self.query_one("#app-bar", Static).update(
-            "[b #67e8f9]DBusLens[/]  [#fde68a]report[/]  [#34d399]Monitor[/]  "
-            "[#84b7b2]Operations-style capture inspector for D-Bus traffic[/]"
+            "[b #60a5fa]DBusLens[/]  [#fcd34d]report[/]  [#6ee7b7]btop-inspired[/]  "
+            "[#9fb3c8]Terminal capture inspector for D-Bus traffic[/]"
         )
 
     def _populate_report_meta(self) -> None:
         self.query_one("#report-meta", Static).update(
-            "[#67e8f9]Capture[/]  "
-            f"[#f8fffe]{metadata_text(self.report)}[/]  "
-            "[#84b7b2]Use Tab to rotate focus and Enter to inspect details[/]"
+            "[#60a5fa]Capture[/]  "
+            f"[#f8fbff]{metadata_text(self.report)}[/]  "
+            "[#7c8da3]Use Tab to rotate focus and Enter to inspect details[/]"
         )
+
+    def _populate_panel_titles(self) -> None:
+        self.query_one("#view-nav", ListView).border_title = " views "
+        self.query_one("#detail-pane", Static).border_title = " selected "
 
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
@@ -212,6 +222,7 @@ class DBusLensReportApp(App[None]):
 
     def _populate_main_table(self) -> None:
         table = self.query_one("#main-table", DataTable)
+        table.border_title = " senders " if self.state.active_view == "outbound" else " members "
         table.cursor_type = "row"
         table.zebra_stripes = True
         if table.columns:
@@ -226,6 +237,7 @@ class DBusLensReportApp(App[None]):
     def refresh_detail(self) -> None:
         self.query_one("#detail-pane", Static).update("\n".join(detail_lines(self.state)))
         table = self.query_one("#detail-table", DataTable)
+        table.border_title = " members " if self.state.active_view == "outbound" else " senders "
         table.cursor_type = "row"
         table.zebra_stripes = True
         if table.columns:

@@ -15,8 +15,9 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("DataTable > .datatable--odd-row", css)
         self.assertIn("DataTable > .datatable--even-row", css)
         self.assertIn("DataTable > .datatable--cursor", css)
+        self.assertIn("#view-nav > ListItem.-highlight", css)
 
-    async def test_textual_ui_uses_monitor_branding(self) -> None:
+    async def test_textual_ui_uses_btop_inspired_branding(self) -> None:
         report = AnalysisReport(
             source_path="record.cap",
             total_events=1,
@@ -29,7 +30,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
 
         async with app.run_test():
             app_bar = app.query_one("#app-bar", Static)
-            self.assertIn("Monitor", str(app_bar.render()))
+            self.assertIn("btop-inspired", str(app_bar.render()))
 
     async def test_selecting_main_row_updates_detail_panel(self) -> None:
         report = AnalysisReport(
@@ -156,6 +157,23 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             labels = [str(label.render()) for label in app.query("#view-nav Label")]
             self.assertIn("Senders", labels)
             self.assertIn("Members", labels)
+
+    async def test_textual_ui_sets_panel_border_titles(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test():
+            self.assertEqual(app.query_one("#view-nav", ListView).border_title, " views ")
+            self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
+            self.assertEqual(app.query_one("#detail-pane", Static).border_title, " selected ")
+            self.assertEqual(app.query_one("#detail-table", DataTable).border_title, " members ")
 
 
 if __name__ == "__main__":
