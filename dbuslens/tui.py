@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+import threading
+
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DataTable, Footer, Label, ListItem, ListView, Static
+from textual.widgets import DataTable, Footer, Label, ListItem, ListView, ProgressBar, Static
 
+from dbuslens.loading import LoadingUpdate, load_report
 from dbuslens.models import AnalysisReport
 from dbuslens.report_app import (
     ReportAppState,
@@ -331,5 +335,97 @@ class DBusLensReportApp(App[None]):
                 widget.add_class("pane-focus")
 
 
+class DBusLensLoaderApp(App[AnalysisReport | Exception | None]):
+    CSS = """
+    Screen {
+        layout: vertical;
+        background: #080a0f;
+        color: #d8f3dc;
+    }
+
+    #loading-view {
+        height: 1fr;
+        align: center middle;
+    }
+
+    #loading-card {
+        width: 72;
+        padding: 1 2;
+        border: round #6ee7b7;
+        background: #0b1017;
+    }
+
+    #loading-title {
+        color: #60a5fa;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #loading-status {
+        color: #e8eef7;
+        margin-bottom: 1;
+    }
+
+    #loading-detail {
+        color: #9fb3c8;
+        margin-top: 1;
+    }
+
+    ProgressBar {
+        width: 1fr;
+        margin: 1 0 0 0;
+    }
+    """
+
+    BINDINGS = [("q", "quit", "Quit")]
+
+    def __init__(self, input_path: str) -> None:
+        super().__init__()
+        self.input_path = Path(input_path)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="loading-view"):
+            with Vertical(id="loading-card"):
+                yield Static("DBusLens report", id="loading-title")
+                yield Static("Opening capture...", id="loading-status")
+                yield ProgressBar(total=100, show_eta=False, id="loading-bar")
+                yield Static(str(self.input_path), id="loading-detail")
+
+    def on_mount(self) -> None:
+        threading.Thread(target=self._load_in_background, daemon=True).start()
+
+    def _load_in_background(self) -> None:
+        try:
+            report = load_report(
+                self.input_path,
+                progress_callback=lambda update: self.call_from_thread(
+                    self._apply_progress,
+                    update,
+                ),
+            )
+        except Exception as exc:
+            self.call_from_thread(self.exit, exc)
+            return
+        self.call_from_thread(self.exit, report)
+
+    def _apply_progress(self, update: LoadingUpdate) -> None:
+        self.query_one("#loading-status", Static).update(
+            f"{update.stage}... {update.percentage}%"
+        )
+        self.query_one("#loading-detail", Static).update(
+            f"{self.input_path}  {update.current}/{update.total}"
+        )
+        self.query_one("#loading-bar", ProgressBar).update(progress=update.percentage)
+
+
 def run_browser(report: AnalysisReport) -> None:
     DBusLensReportApp(report).run()
+
+
+def run_report(input_path: Path) -> None:
+    result = DBusLensLoaderApp(str(input_path)).run()
+    if isinstance(result, Exception):
+        raise result
+    if result is None:
+        return
+    run_browser(result)

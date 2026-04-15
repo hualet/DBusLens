@@ -1,13 +1,22 @@
 import unittest
 
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Footer, Header, Label, ListView, Static
+from textual.widgets import DataTable, Footer, Header, Label, ListView, ProgressBar, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
-from dbuslens.tui import DBusLensReportApp
+from dbuslens.tui import DBusLensLoaderApp, DBusLensReportApp
 
 
 class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
+    async def test_loader_app_starts_with_loading_view(self) -> None:
+        app = DBusLensLoaderApp("record.cap")
+
+        async with app.run_test():
+            self.assertIsInstance(app.query_one("#loading-status", Static), Static)
+            self.assertIsInstance(app.query_one("#loading-bar", ProgressBar), ProgressBar)
+            with self.assertRaises(NoMatches):
+                app.query_one("#eta")
+
     def test_textual_ui_styles_datatable_components(self) -> None:
         css = DBusLensReportApp.CSS
 

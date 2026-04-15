@@ -16,6 +16,7 @@ def build_report(
     source_path: str = "<memory>",
     skipped_blocks: int = 0,
     resolve_process: Callable[[str], ProcessInfo | None] = resolve_process_name,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> AnalysisReport:
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
@@ -23,8 +24,11 @@ def build_report(
     inbound_children: dict[str, Counter[str]] = defaultdict(Counter)
 
     actionable_events = 0
-    for event in events:
+    total_events = len(events)
+    for index, event in enumerate(events, start=1):
         if event.message_type not in ACTIONABLE_TYPES:
+            if progress_callback:
+                progress_callback(index, total_events)
             continue
         actionable_events += 1
         service_name = event.sender or "<unknown>"
@@ -33,6 +37,11 @@ def build_report(
         outbound_children[service_name][operation_name] += 1
         inbound_totals[operation_name] += 1
         inbound_children[operation_name][service_name] += 1
+        if progress_callback:
+            progress_callback(index, total_events)
+
+    if progress_callback and total_events == 0:
+        progress_callback(1, 1)
 
     return AnalysisReport(
         source_path=source_path,

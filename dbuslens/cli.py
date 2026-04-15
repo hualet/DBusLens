@@ -4,10 +4,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from dbuslens.analyzer import build_report
-from dbuslens.pcap_parser import parse_pcap_bytes
 from dbuslens.record import RecordError, build_default_output_path, record_monitor
-from dbuslens.tui import run_browser
+from dbuslens.tui import run_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,18 +51,9 @@ def _handle_report(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     if not input_path.exists():
         raise ValueError(f"input file not found: {input_path}")
-    pcap_bytes = input_path.read_bytes()
-    if not pcap_bytes:
+    if input_path.stat().st_size == 0:
         raise ValueError(f"input file is empty: {input_path}")
-
-    parsed = parse_pcap_bytes(pcap_bytes)
-    report = build_report(
-        parsed.events,
-        source_path=str(input_path),
-        skipped_blocks=parsed.skipped_packets,
-    )
-
-    run_browser(report)
+    run_report(input_path)
     return 0
 
 
