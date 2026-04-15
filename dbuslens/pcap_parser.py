@@ -47,7 +47,7 @@ def parse_pcap_stream(
                 stream=io.BytesIO(packet),
                 negotiate_unix_fd=False,
             ).unmarshall()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             skipped_packets += 1
             continue
 

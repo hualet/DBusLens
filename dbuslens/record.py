@@ -24,6 +24,7 @@ def build_default_output_path(
     now: datetime | None = None,
     base_dir: Path | None = None,
 ) -> Path:
+    del bus, now
     directory = base_dir or Path.cwd()
     return directory / "record.cap"
 
@@ -44,22 +45,22 @@ def record_monitor(
 
     command = [monitor_path, f"--{bus}"]
     command.append("--pcap")
-    process = subprocess.Popen(
+    with subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-    )
-    try:
-        stdout, stderr = process.communicate(timeout=duration)
-        exit_code = process.returncode or 0
-    except subprocess.TimeoutExpired:
-        process.terminate()
+    ) as process:
         try:
-            stdout, stderr = process.communicate(timeout=3)
+            stdout, stderr = process.communicate(timeout=duration)
+            exit_code = process.returncode or 0
         except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
-        exit_code = process.returncode or 0
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+            exit_code = process.returncode or 0
 
     if exit_code not in {0, -15} and not stdout:
         stderr_text = stderr.decode("utf-8", "replace").strip()

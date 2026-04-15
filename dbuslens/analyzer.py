@@ -39,7 +39,9 @@ def build_report(
             if event.reply_serial is not None:
                 original = call_index.get((event.destination, event.sender, event.reply_serial))
             service_name = service_name_for(
-                original.sender if original and original.sender else event.destination or "<unknown>"
+                original.sender
+                if original and original.sender
+                else event.destination or "<unknown>"
             )
             operation_name = original.operation if original else "<unknown>"
             error_totals[error_name] += 1
@@ -92,7 +94,11 @@ def _build_rows(
                 children=[
                     DetailRow(
                         name=child_name,
-                        process=resolve_process(child_name) if _looks_like_service(child_name) else None,
+                        process=(
+                            resolve_process(child_name)
+                            if _looks_like_service(child_name)
+                            else None
+                        ),
                         count=child_count,
                     )
                     for child_name, child_count in child_rows
@@ -167,7 +173,11 @@ def _build_error_rows(
                 children=[
                     DetailRow(
                         name=service_name,
-                        process=resolve_process(service_name) if _looks_like_service(service_name) else None,
+                        process=(
+                            resolve_process(service_name)
+                            if _looks_like_service(service_name)
+                            else None
+                        ),
                         count=child_count,
                         secondary=operation_name,
                     )

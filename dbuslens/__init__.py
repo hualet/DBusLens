@@ -1,2 +1,1 @@
 """DBusLens package."""
-

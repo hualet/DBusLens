@@ -47,11 +47,11 @@ class BuildReportTests(unittest.TestCase):
 
         report = build_report(
             events,
-            resolve_process=lambda service: {
+            resolve_process={
                 ":1.10": ProcessInfo(short_name="demo-service", pid=2020),
                 "org.example.Service": ProcessInfo(short_name="demo-service", pid=2020),
                 ":1.11": ProcessInfo(short_name="demo-client", pid=1010),
-            }.get(service),
+            }.get,
         )
 
         self.assertEqual(report.outbound_rows[0].name, ":1.11")
@@ -112,10 +112,10 @@ class BuildReportTests(unittest.TestCase):
 
         report = build_report(
             events,
-            resolve_process=lambda service: {
+            resolve_process={
                 ":1.10": ProcessInfo(short_name="demo-client", pid=1010),
                 "org.example.Service": ProcessInfo(short_name="demo-service", pid=2020),
-            }.get(service),
+            }.get,
         )
 
         self.assertEqual(report.total_events, 4)
@@ -190,9 +190,9 @@ class BuildReportTests(unittest.TestCase):
 
         report = build_report(
             events,
-            resolve_process=lambda service: {
+            resolve_process={
                 ":1.10": ProcessInfo(short_name="demo-client", pid=1010),
-            }.get(service),
+            }.get,
         )
 
         self.assertEqual(report.error_rows[0].name, "org.freedesktop.DBus.Error.NameHasNoOwner")

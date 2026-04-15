@@ -1,7 +1,7 @@
 import unittest
 
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Footer, Header, Label, ListView, ProgressBar, Static
+from textual.widgets import DataTable, Footer, Header, ListView, ProgressBar, Static
 
 from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
 from dbuslens.tui import DBusLensLoaderApp, DBusLensReportApp

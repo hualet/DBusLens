@@ -2,10 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dbuslens.loading import load_report
-from tests.test_pcap_parser import build_pcap_bytes
 from dbus_fast.constants import MessageType
 from dbus_fast.message import Message
+
+from dbuslens.loading import load_report
+from tests.test_pcap_parser import build_pcap_bytes
 
 
 class LoadReportTests(unittest.TestCase):

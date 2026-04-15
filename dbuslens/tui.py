@@ -322,7 +322,10 @@ class DBusLensReportApp(App[None]):
         for row in main_rows(self.state):
             table.add_row(*row)
         if table.row_count:
-            table.move_cursor(row=min(self.state.selected_index, table.row_count - 1), animate=False)
+            table.move_cursor(
+                row=min(self.state.selected_index, table.row_count - 1),
+                animate=False,
+            )
 
     def refresh_detail(self) -> None:
         self.query_one("#detail-pane", Static).update("\n".join(detail_lines(self.state)))
@@ -543,7 +546,7 @@ class DBusLensLoaderApp(App[AnalysisReport | Exception | None]):
                     update,
                 ),
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             self._call_on_ui(self.exit, exc)
             return
         self._call_on_ui(self.exit, report)
@@ -551,8 +554,8 @@ class DBusLensLoaderApp(App[AnalysisReport | Exception | None]):
     def _call_on_ui(self, callback, *args) -> None:
         try:
             self.call_from_thread(callback, *args)
-        except Exception:
-            return
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
 
     def _apply_progress(self, update: LoadingUpdate) -> None:
         self.query_one("#loading-status", Static).update(
@@ -572,6 +575,5 @@ def run_report(input_path: Path) -> None:
     result = DBusLensLoaderApp(str(input_path)).run()
     if isinstance(result, Exception):
         raise result
-    if result is None:
-        return
-    run_browser(result)
+    if result is not None:
+        run_browser(result)

@@ -1,0 +1,15 @@
+[MAIN]
+py-version=3.12
+
+[FORMAT]
+max-line-length=100
+
+[MESSAGES CONTROL]
+disable=
+    duplicate-code,
+    missing-class-docstring,
+    missing-function-docstring,
+    missing-module-docstring,
+    no-name-in-module,
+    too-many-instance-attributes,
+    too-many-locals
