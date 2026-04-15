@@ -24,6 +24,8 @@ from dbuslens.report_app import (
 
 class DBusLensReportApp(App[None]):
     BINDINGS = [
+        ("s", "show_outbound", "Senders"),
+        ("m", "show_inbound", "Members"),
         ("left", "show_outbound", "Senders"),
         ("right", "show_inbound", "Members"),
         ("e", "show_errors", "Errors"),

@@ -229,6 +229,49 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(detail_table.border_title, " details ")
             self.assertEqual(detail_table.row_count, 1)
 
+    async def test_textual_ui_supports_sender_and_member_shortcuts(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=2,
+            actionable_events=2,
+            skipped_blocks=0,
+            outbound_rows=[
+                Row(
+                    name="org.example.Service",
+                    process=ProcessInfo(short_name="demo-service", pid=4242),
+                    count=1,
+                    children=[DetailRow(name="org.example.Method", process=None, count=1)],
+                )
+            ],
+            inbound_rows=[
+                Row(
+                    name="org.example.Method",
+                    process=None,
+                    count=1,
+                    children=[
+                        DetailRow(
+                            name="org.example.Service",
+                            process=ProcessInfo(short_name="demo-service", pid=4242),
+                            count=1,
+                        )
+                    ],
+                )
+            ],
+            error_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test() as pilot:
+            await pilot.press("m")
+            await pilot.pause()
+            self.assertEqual(app.state.active_view, "inbound")
+            self.assertEqual(app.query_one("#main-table", DataTable).border_title, " members ")
+
+            await pilot.press("s")
+            await pilot.pause()
+            self.assertEqual(app.state.active_view, "outbound")
+            self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
+
 
 if __name__ == "__main__":
     unittest.main()
