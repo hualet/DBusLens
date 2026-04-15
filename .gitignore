@@ -213,4 +213,4 @@ __marimo__/
 .superpowers
 
 # record output
-record.cap
+*.cap
