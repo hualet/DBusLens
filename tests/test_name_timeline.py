@@ -152,6 +152,43 @@ class NameTimelineResolverTests(unittest.TestCase):
         self.assertEqual(resolved.display_name, ":1.42")
         self.assertIsNone(resolved.pid)
 
+    def test_resolve_name_falls_back_to_final_snapshot_alias(self) -> None:
+        resolver = NameTimelineResolver.from_payload(
+            {"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},
+            {
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [],
+                },
+                "events": [],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.LateService",
+                            "owner": ":1.77",
+                            "pid": 7777,
+                            "uid": 1000,
+                            "cmdline": ["/bin/late-service"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "error": None,
+            },
+        )
+
+        resolved = resolver.resolve_name(":1.77", timestamp=1713243601.0)
+
+        self.assertEqual(resolved.display_name, "org.example.LateService")
+        self.assertEqual(resolved.owner, ":1.77")
+        self.assertEqual(resolved.pid, 7777)
+
 
 if __name__ == "__main__":
     unittest.main()

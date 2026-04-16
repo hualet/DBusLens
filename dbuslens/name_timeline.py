@@ -67,6 +67,8 @@ class NameTimelineResolver:
 
         active_info = self._resolve_active_info(raw_name, timestamp)
         if active_info is None:
+            active_info = self._final_snapshot.get(raw_name)
+        if active_info is None:
             return ResolvedName(
                 raw_name=raw_name,
                 display_name=raw_name,
