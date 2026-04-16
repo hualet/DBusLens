@@ -78,6 +78,14 @@ def _stop_background_monitor(process: subprocess.Popen[bytes]) -> tuple[bytes, b
     return stdout, stderr, exit_code
 
 
+def _build_timeline_command(monitor_path: str, bus: str) -> list[str]:
+    return [
+        monitor_path,
+        f"--{bus}",
+        "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged'",
+    ]
+
+
 def _parse_name_owner_changed_line(line: str) -> dict[str, object] | None:
     if "member=NameOwnerChanged" not in line:
         return None
@@ -120,15 +128,12 @@ def _build_names_timeline(
     }
 
 
-def _build_timeline_error(stdout: bytes, stderr: bytes, exit_code: int) -> str | None:
-    stdout_text = stdout.decode("utf-8", "replace").strip()
+def _build_timeline_error(stderr: bytes, exit_code: int) -> str | None:
     stderr_text = stderr.decode("utf-8", "replace").strip()
     if exit_code not in {0, -15}:
         if stderr_text:
             return f"timeline monitor exited with code {exit_code}: {stderr_text}"
         return f"timeline monitor exited with code {exit_code}"
-    if not stdout_text:
-        return stderr_text or "timeline monitor produced no output"
     return stderr_text or None
 
 
@@ -448,25 +453,25 @@ def record_monitor(
 
     pcap_command = [monitor_path, f"--{bus}", "--pcap"]
     profile_command = [monitor_path, f"--{bus}", "--profile"]
-    timeline_command = [monitor_path, f"--{bus}"]
+    timeline_command = _build_timeline_command(monitor_path, bus)
     timeline_process: subprocess.Popen[bytes] | None = None
     timeline_start_error: str | None = None
+    timeline_stdout = b""
+    timeline_stderr = b""
+    timeline_exit_code = 0
     try:
         timeline_process = _start_background_monitor(timeline_command)
     except OSError as exc:
         timeline_start_error = f"timeline monitor failed to start: {exc}"
-    started_at_iso = datetime.now().astimezone().isoformat()
-    initial_snapshot = _capture_names(bus)
     try:
+        started_at_iso = datetime.now().astimezone().isoformat()
+        initial_snapshot = _capture_names(bus)
         stdout, stderr, exit_code = _run_monitor(pcap_command, duration)
         profile_stdout, profile_stderr, profile_exit_code = _run_monitor(profile_command, duration)
+        final_snapshot = _capture_names(bus)
     finally:
-        timeline_stdout = b""
-        timeline_stderr = b""
-        timeline_exit_code = 0
         if timeline_process is not None:
             timeline_stdout, timeline_stderr, timeline_exit_code = _stop_background_monitor(timeline_process)
-    final_snapshot = _capture_names(bus)
 
     if exit_code not in {0, -15} and not stdout:
         stderr_text = stderr.decode("utf-8", "replace").strip()
@@ -481,7 +486,6 @@ def record_monitor(
 
     ended_at_iso = datetime.now().astimezone().isoformat()
     timeline_error = timeline_start_error or _build_timeline_error(
-        timeline_stdout,
         timeline_stderr,
         timeline_exit_code,
     )
