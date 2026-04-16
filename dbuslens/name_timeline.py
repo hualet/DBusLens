@@ -45,8 +45,22 @@ class NameTimelineResolver:
     ) -> NameTimelineResolver:
         snapshot_index = _build_snapshot_index(snapshot_names)
         timeline_index = _build_timeline_index(names_timeline)
-        initial_snapshot = timeline_index["initial_snapshot"] or snapshot_index
-        final_snapshot = timeline_index["final_snapshot"] or snapshot_index
+        initial_snapshot_explicit = bool(
+            isinstance(names_timeline, dict)
+            and "initial_snapshot" in names_timeline
+            and isinstance(names_timeline.get("initial_snapshot"), dict)
+        )
+        final_snapshot_explicit = bool(
+            isinstance(names_timeline, dict)
+            and "final_snapshot" in names_timeline
+            and isinstance(names_timeline.get("final_snapshot"), dict)
+        )
+        initial_snapshot = (
+            timeline_index["initial_snapshot"] if initial_snapshot_explicit else snapshot_index
+        )
+        final_snapshot = (
+            timeline_index["final_snapshot"] if final_snapshot_explicit else snapshot_index
+        )
         return cls(
             snapshot_names=snapshot_index,
             initial_snapshot=initial_snapshot,
@@ -66,7 +80,7 @@ class NameTimelineResolver:
             )
 
         active_info = self._resolve_active_info(raw_name, timestamp)
-        if active_info is None:
+        if active_info is None and timestamp is None:
             active_info = self._final_snapshot.get(raw_name)
         if active_info is None:
             return ResolvedName(
@@ -78,7 +92,7 @@ class NameTimelineResolver:
                 cmdline=None,
             )
 
-        metadata = self._resolve_metadata(active_info.name, active_info.owner)
+        metadata = self._resolve_metadata(active_info)
         if raw_name.startswith(":"):
             display_name = active_info.name
             owner = active_info.owner
@@ -146,16 +160,23 @@ class NameTimelineResolver:
                 cmdline=current.cmdline,
             )
 
-    def _resolve_metadata(self, name: str, owner: str | None) -> CaptureNameInfo | None:
-        candidates = [self._initial_snapshot.get(name), self._final_snapshot.get(name), self._snapshot_names.get(name)]
-        if owner:
+    def _resolve_metadata(self, info: CaptureNameInfo) -> CaptureNameInfo | None:
+        candidates: list[CaptureNameInfo | None] = []
+        if info.owner:
             candidates.extend(
                 [
-                    self._initial_snapshot.get(owner),
-                    self._final_snapshot.get(owner),
-                    self._snapshot_names.get(owner),
+                    self._final_snapshot.get(info.owner),
+                    self._initial_snapshot.get(info.owner),
+                    self._snapshot_names.get(info.owner),
                 ]
             )
+        candidates.extend(
+            [
+                self._final_snapshot.get(info.name),
+                self._initial_snapshot.get(info.name),
+                self._snapshot_names.get(info.name),
+            ]
+        )
 
         for candidate in candidates:
             if candidate is not None:

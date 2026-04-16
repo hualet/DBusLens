@@ -63,7 +63,16 @@ class NameTimelineResolverTests(unittest.TestCase):
                 "initial_snapshot": {
                     "captured_at": "2026-04-16T10:20:30+08:00",
                     "bus": "session",
-                    "names": [],
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.42",
+                            "pid": 4242,
+                            "uid": 1000,
+                            "cmdline": ["/bin/service-old"],
+                            "error": None,
+                        }
+                    ],
                 },
                 "events": [
                     {
@@ -152,9 +161,22 @@ class NameTimelineResolverTests(unittest.TestCase):
         self.assertEqual(resolved.display_name, ":1.42")
         self.assertIsNone(resolved.pid)
 
-    def test_resolve_name_falls_back_to_final_snapshot_alias(self) -> None:
+    def test_resolve_name_prefers_new_owner_metadata_after_handoff(self) -> None:
         resolver = NameTimelineResolver.from_payload(
-            {"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},
+            {
+                "captured_at": "2026-04-16T10:20:30+08:00",
+                "bus": "session",
+                "names": [
+                    {
+                        "name": "org.example.Service",
+                        "owner": ":1.42",
+                        "pid": 4242,
+                        "uid": 1000,
+                        "cmdline": ["/bin/service-old"],
+                        "error": None,
+                    }
+                ],
+            },
             {
                 "bus": "session",
                 "started_at": "2026-04-16T10:20:30+08:00",
@@ -164,6 +186,79 @@ class NameTimelineResolverTests(unittest.TestCase):
                     "bus": "session",
                     "names": [],
                 },
+                "events": [
+                    {
+                        "timestamp": 1713243602.0,
+                        "name": "org.example.Service",
+                        "old_owner": ":1.42",
+                        "new_owner": ":1.77",
+                    }
+                ],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.77",
+                            "pid": 7777,
+                            "uid": 1000,
+                            "cmdline": ["/bin/service-new"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "error": None,
+            },
+        )
+
+        resolved = resolver.resolve_name(":1.77", timestamp=1713243603.0)
+
+        self.assertEqual(resolved.display_name, "org.example.Service")
+        self.assertEqual(resolved.owner, ":1.77")
+        self.assertEqual(resolved.pid, 7777)
+        self.assertEqual(resolved.cmdline, ["/bin/service-new"])
+
+    def test_resolve_name_keeps_explicit_empty_timeline_snapshots_empty(self) -> None:
+        resolver = NameTimelineResolver.from_payload(
+            {
+                "captured_at": "2026-04-16T10:20:30+08:00",
+                "bus": "session",
+                "names": [
+                    {
+                        "name": "org.example.Service",
+                        "owner": ":1.42",
+                        "pid": 4242,
+                        "uid": 1000,
+                        "cmdline": ["/bin/service"],
+                        "error": None,
+                    }
+                ],
+            },
+            {
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {},
+                "events": [],
+                "final_snapshot": {},
+                "error": None,
+            },
+        )
+
+        resolved = resolver.resolve_name(":1.42", timestamp=1713243600.5)
+
+        self.assertEqual(resolved.display_name, ":1.42")
+        self.assertIsNone(resolved.pid)
+
+    def test_resolve_name_does_not_use_final_snapshot_alias_before_it_exists(self) -> None:
+        resolver = NameTimelineResolver.from_payload(
+            {"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},
+            {
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {},
                 "events": [],
                 "final_snapshot": {
                     "captured_at": "2026-04-16T10:20:40+08:00",
@@ -185,9 +280,9 @@ class NameTimelineResolverTests(unittest.TestCase):
 
         resolved = resolver.resolve_name(":1.77", timestamp=1713243601.0)
 
-        self.assertEqual(resolved.display_name, "org.example.LateService")
-        self.assertEqual(resolved.owner, ":1.77")
-        self.assertEqual(resolved.pid, 7777)
+        self.assertEqual(resolved.display_name, ":1.77")
+        self.assertEqual(resolved.raw_name, ":1.77")
+        self.assertIsNone(resolved.pid)
 
 
 if __name__ == "__main__":
