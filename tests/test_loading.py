@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import json
+import zipfile
 from pathlib import Path
 
 from dbus_fast.constants import MessageType
@@ -318,6 +320,64 @@ class LoadReportTests(unittest.TestCase):
                     names_timeline=timeline,
                 ),
             )
+
+            report = load_report(path)
+
+        self.assertEqual(report.source_path, str(path))
+        self.assertEqual(report.total_events, 1)
+
+    def test_load_report_accepts_bundle_missing_names_timeline_member(self) -> None:
+        capture = build_pcap_bytes(
+            [
+                (
+                    1713081000.1,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender=":1.10",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Ping",
+                        serial=17,
+                    ),
+                )
+            ]
+        )
+        metadata = BundleMetadata(
+            bundle_version=1,
+            created_at="2026-04-16T10:20:30+08:00",
+            bus="session",
+            duration_seconds=10,
+            capture_files={
+                "pcap": "capture.cap",
+                "profile": "capture.profile",
+                "names": "names.json",
+                "names_timeline": "names_timeline.json",
+            },
+            monitor={
+                "command": ["dbus-monitor", "--session", "--pcap"],
+                "profile_command": ["dbus-monitor", "--session", "--profile"],
+                "stderr": "",
+                "mode": "monitor",
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("meta.json", json.dumps(metadata.to_dict(), indent=2, sort_keys=True))
+                archive.writestr("capture.cap", capture)
+                archive.writestr("capture.profile", "")
+                archive.writestr(
+                    "names.json",
+                    json.dumps(
+                        {
+                            "captured_at": "2026-04-16T10:20:31+08:00",
+                            "bus": "session",
+                            "names": [],
+                        }
+                    ),
+                )
 
             report = load_report(path)
 

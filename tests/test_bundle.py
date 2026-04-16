@@ -1,9 +1,11 @@
+import json
+import subprocess
 import tempfile
 import unittest
+import zipfile
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
-import subprocess
 
 from dbuslens.bundle import BundleContents, BundleMetadata, read_bundle, write_bundle
 from dbuslens.record import _capture_names
@@ -199,6 +201,78 @@ class BundleRoundTripTests(unittest.TestCase):
 
         self.assertEqual(actual.metadata, metadata)
         self.assertEqual(actual.names_timeline, expected_timeline)
+
+    def test_write_bundle_rejects_names_timeline_metadata_without_payload(self) -> None:
+        metadata = BundleMetadata(
+            bundle_version=1,
+            created_at="2026-04-16T10:20:30+08:00",
+            bus="session",
+            duration_seconds=10,
+            capture_files={
+                "pcap": "capture.cap",
+                "profile": "capture.profile",
+                "names": "names.json",
+                "names_timeline": "names_timeline.json",
+            },
+            monitor={
+                "command": ["dbus-monitor", "--session", "--pcap"],
+                "profile_command": ["dbus-monitor", "--session", "--profile"],
+                "stderr": "",
+                "mode": "monitor",
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+
+            with self.assertRaisesRegex(
+                ValueError, "advertises names_timeline but no timeline payload was provided"
+            ):
+                write_bundle(
+                    path,
+                    BundleContents(
+                        metadata=metadata,
+                        pcap_bytes=b"pcap-bytes",
+                        profile_text="profile-text",
+                        names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                    ),
+                )
+
+    def test_read_bundle_returns_none_when_names_timeline_member_is_missing(self) -> None:
+        metadata = BundleMetadata(
+            bundle_version=1,
+            created_at="2026-04-16T10:20:30+08:00",
+            bus="session",
+            duration_seconds=10,
+            capture_files={
+                "pcap": "capture.cap",
+                "profile": "capture.profile",
+                "names": "names.json",
+                "names_timeline": "names_timeline.json",
+            },
+            monitor={
+                "command": ["dbus-monitor", "--session", "--pcap"],
+                "profile_command": ["dbus-monitor", "--session", "--profile"],
+                "stderr": "",
+                "mode": "monitor",
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("meta.json", json.dumps(metadata.to_dict(), indent=2, sort_keys=True))
+                archive.writestr("capture.cap", b"pcap-bytes")
+                archive.writestr("capture.profile", "profile-text")
+                archive.writestr(
+                    "names.json",
+                    json.dumps({"captured_at": "2026-04-16T10:20:31+08:00", "names": []}),
+                )
+
+            actual = read_bundle(path)
+
+        self.assertEqual(actual.metadata, metadata)
+        self.assertIsNone(actual.names_timeline)
 
     def test_capture_names_marks_snapshot_failure_when_gdbus_is_missing(self) -> None:
         with patch("dbuslens.record.shutil.which", return_value=None):
