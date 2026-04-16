@@ -138,6 +138,68 @@ class BundleRoundTripTests(unittest.TestCase):
 
         self.assertEqual(actual.names, expected_names)
 
+    def test_write_and_read_bundle_preserves_names_timeline(self) -> None:
+        metadata = BundleMetadata(
+            bundle_version=1,
+            created_at="2026-04-16T10:20:30+08:00",
+            bus="session",
+            duration_seconds=10,
+            capture_files={
+                "pcap": "capture.cap",
+                "profile": "capture.profile",
+                "names": "names.json",
+                "names_timeline": "names_timeline.json",
+            },
+            monitor={
+                "command": ["dbus-monitor", "--session", "--pcap"],
+                "profile_command": ["dbus-monitor", "--session", "--profile"],
+                "stderr": "",
+                "mode": "monitor",
+            },
+        )
+        expected_timeline = {
+            "bus": "session",
+            "started_at": "2026-04-16T10:20:30+08:00",
+            "ended_at": "2026-04-16T10:20:40+08:00",
+            "initial_snapshot": {
+                "captured_at": "2026-04-16T10:20:30+08:00",
+                "bus": "session",
+                "names": [],
+            },
+            "events": [
+                {
+                    "timestamp": 1713243600.5,
+                    "name": "org.example.Service",
+                    "old_owner": "",
+                    "new_owner": ":1.42",
+                }
+            ],
+            "final_snapshot": {
+                "captured_at": "2026-04-16T10:20:40+08:00",
+                "bus": "session",
+                "names": [],
+            },
+            "error": None,
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+
+            write_bundle(
+                path,
+                BundleContents(
+                    metadata=metadata,
+                    pcap_bytes=b"pcap-bytes",
+                    profile_text="profile-text",
+                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                    names_timeline=expected_timeline,
+                ),
+            )
+            actual = read_bundle(path)
+
+        self.assertEqual(actual.metadata, metadata)
+        self.assertEqual(actual.names_timeline, expected_timeline)
+
     def test_capture_names_marks_snapshot_failure_when_gdbus_is_missing(self) -> None:
         with patch("dbuslens.record.shutil.which", return_value=None):
             snapshot = _capture_names("session")

@@ -233,6 +233,97 @@ class LoadReportTests(unittest.TestCase):
         self.assertEqual(report.error_summaries[0].target, "org.example.Service")
         self.assertEqual(report.error_summaries[0].target_process.display_name, "org.example.Service [4242]")
 
+    def test_load_report_accepts_bundle_with_names_timeline(self) -> None:
+        capture = build_pcap_bytes(
+            [
+                (
+                    1713081000.1,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender=":1.10",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Ping",
+                        serial=17,
+                    ),
+                )
+            ]
+        )
+        snapshot = {
+            "captured_at": "2026-04-16T10:20:31+08:00",
+            "bus": "session",
+            "names": [
+                {
+                    "name": "org.example.Service",
+                    "owner": ":1.42",
+                    "pid": 4242,
+                    "uid": 1000,
+                    "cmdline": ["/usr/bin/example-service", "--session"],
+                    "error": None,
+                }
+            ],
+        }
+        timeline = {
+            "bus": "session",
+            "started_at": "2026-04-16T10:20:30+08:00",
+            "ended_at": "2026-04-16T10:20:40+08:00",
+            "initial_snapshot": {
+                "captured_at": "2026-04-16T10:20:30+08:00",
+                "bus": "session",
+                "names": [],
+            },
+            "events": [
+                {
+                    "timestamp": 1713243600.5,
+                    "name": "org.example.Service",
+                    "old_owner": "",
+                    "new_owner": ":1.42",
+                }
+            ],
+            "final_snapshot": {
+                "captured_at": "2026-04-16T10:20:40+08:00",
+                "bus": "session",
+                "names": [],
+            },
+            "error": None,
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+            write_bundle(
+                path,
+                BundleContents(
+                    metadata=BundleMetadata(
+                        bundle_version=1,
+                        created_at="2026-04-16T10:20:30+08:00",
+                        bus="session",
+                        duration_seconds=10,
+                        capture_files={
+                            "pcap": "capture.cap",
+                            "profile": "capture.profile",
+                            "names": "names.json",
+                            "names_timeline": "names_timeline.json",
+                        },
+                        monitor={
+                            "command": ["dbus-monitor", "--session", "--pcap"],
+                            "profile_command": ["dbus-monitor", "--session", "--profile"],
+                            "stderr": "",
+                            "mode": "monitor",
+                        },
+                    ),
+                    pcap_bytes=capture,
+                    profile_text="",
+                    names=snapshot,
+                    names_timeline=timeline,
+                ),
+            )
+
+            report = load_report(path)
+
+        self.assertEqual(report.source_path, str(path))
+        self.assertEqual(report.total_events, 1)
+
     def test_load_report_rejects_legacy_cap_input(self) -> None:
         capture = build_pcap_bytes(
             [

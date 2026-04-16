@@ -59,6 +59,7 @@ class BundleContents:
     pcap_bytes: bytes
     profile_text: str
     names: dict[str, Any]
+    names_timeline: dict[str, Any] | None = None
 
 
 def is_bundle_path(path: Path) -> bool:
@@ -76,6 +77,11 @@ def write_bundle(path: Path, contents: BundleContents) -> None:
             contents.metadata.capture_files["names"],
             json.dumps(contents.names, indent=2, sort_keys=True),
         )
+        if "names_timeline" in contents.metadata.capture_files and contents.names_timeline is not None:
+            archive.writestr(
+                contents.metadata.capture_files["names_timeline"],
+                json.dumps(contents.names_timeline, indent=2, sort_keys=True),
+            )
 
 
 def read_bundle(path: Path) -> BundleContents:
@@ -86,9 +92,14 @@ def read_bundle(path: Path) -> BundleContents:
         pcap_bytes = archive.read(metadata.capture_files["pcap"])
         profile_text = archive.read(metadata.capture_files["profile"]).decode("utf-8", "replace")
         names = json.loads(archive.read(metadata.capture_files["names"]))
+        timeline_path = metadata.capture_files.get("names_timeline")
+        names_timeline = None
+        if timeline_path and timeline_path in archive.namelist():
+            names_timeline = json.loads(archive.read(timeline_path))
     return BundleContents(
         metadata=metadata,
         pcap_bytes=pcap_bytes,
         profile_text=profile_text,
         names=names,
+        names_timeline=names_timeline,
     )
