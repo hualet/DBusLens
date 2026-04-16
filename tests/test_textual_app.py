@@ -89,6 +89,10 @@ def _make_report() -> AnalysisReport:
                         latency_ms="250.0 ms",
                         notes="",
                         count=1,
+                        timestamp=1.0,
+                        destination="org.example.Service",
+                        member="GetNameOwner",
+                        args_preview="not captured",
                     )
                 ],
             )
@@ -269,6 +273,10 @@ class ReportAppStateTests(unittest.TestCase):
                             latency_ms="125.0 ms",
                             notes="retried within 5s",
                             count=1,
+                            timestamp=1.0,
+                            destination="org.example.Service",
+                            member="GetNameOwner",
+                            args_preview="not captured",
                         ),
                         ErrorDetail(
                             caller=":1.11",
@@ -289,6 +297,10 @@ class ReportAppStateTests(unittest.TestCase):
                             latency_ms="375.0 ms",
                             notes="",
                             count=1,
+                            timestamp=2.0,
+                            destination="org.example.Service",
+                            member="GetNameOwner",
+                            args_preview="not captured",
                         ),
                     ],
                 )
@@ -311,13 +323,13 @@ class ReportAppStateTests(unittest.TestCase):
 
         self.assertEqual(
             detail_columns(state),
-            ("Count", "Caller", "Process", "Owner/PID", "Latency", "Notes"),
+            ("Time", "Sender", "Destination", "Member", "Args", "Latency", "Notes"),
         )
         self.assertEqual(
             detail_rows(state),
             [
-                ("1", ":1.10", ":1.10 [1010]", ":1.42 [4242]", "125.0 ms", "retried within 5s"),
-                ("1", ":1.11", ":1.11 [1011]", ":1.42 [4242]", "375.0 ms", "-"),
+                ("1.000s", ":1.10", "org.example.Service", "GetNameOwner", "not captured", "125.0 ms", "retried within 5s"),
+                ("2.000s", ":1.11", "org.example.Service", "GetNameOwner", "not captured", "375.0 ms", "-"),
             ],
         )
 

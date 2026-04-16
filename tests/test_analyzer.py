@@ -308,48 +308,29 @@ class BuildReportTests(unittest.TestCase):
             }.get,
         )
 
-        expected = ErrorSummary(
-            error_name="org.example.Error.Failed",
-            target="org.example.Service",
-            operation="org.example.Demo.Ping",
-            count=2,
-            first_seen=1.2,
-            last_seen=2.4,
-            average_latency_ms=300.0,
-            retry_count=1,
-            unique_callers=1,
-            target_process=CaptureNameInfo(
-                name="org.example.Service",
-                owner=":1.42",
-                pid=2020,
-                uid=1000,
-                cmdline=["/usr/bin/example-service"],
-            ),
-            details=[
-                ErrorDetail(
-                    caller=":1.10",
-                    caller_process=CaptureNameInfo(
-                        name="org.example.Client",
-                        owner=":1.10",
-                        pid=1010,
-                        uid=1000,
-                        cmdline=["/usr/bin/example-client"],
-                    ),
-                    target_process=CaptureNameInfo(
-                        name="org.example.Service",
-                        owner=":1.42",
-                        pid=2020,
-                        uid=1000,
-                        cmdline=["/usr/bin/example-service"],
-                    ),
-                    latency_ms="300.0 ms",
-                    notes="retried within 5s",
-                    count=2,
-                )
+        self.assertEqual(len(report.error_summaries), 1)
+        summary = report.error_summaries[0]
+        self.assertEqual(summary.error_name, "org.example.Error.Failed")
+        self.assertEqual(summary.target, "org.example.Service")
+        self.assertEqual(summary.operation, "org.example.Demo.Ping")
+        self.assertEqual(summary.count, 2)
+        self.assertEqual(summary.first_seen, 1.2)
+        self.assertEqual(summary.last_seen, 2.4)
+        self.assertEqual(summary.average_latency_ms, 300.0)
+        self.assertEqual(summary.retry_count, 1)
+        self.assertEqual(summary.unique_callers, 1)
+        self.assertEqual(len(summary.details), 2)
+        self.assertEqual(
+            [(detail.member, detail.destination, detail.args_preview) for detail in summary.details],
+            [
+                ("Ping", "org.example.Service", "not captured"),
+                ("Ping", "org.example.Service", "not captured"),
             ],
         )
-
-        self.assertEqual(report.error_summaries, [expected])
+        self.assertEqual(summary.details[0].latency_ms, "200.0 ms")
+        self.assertEqual(summary.details[1].latency_ms, "400.0 ms")
+        self.assertEqual(summary.details[0].notes, "")
+        self.assertEqual(summary.details[1].notes, "retried within 5s")
         self.assertEqual(report.error_rows[0].name, "org.example.Error.Failed")
 
     def test_build_report_keeps_alias_targets_separate_when_pids_match(self) -> None:
@@ -720,9 +701,9 @@ class BuildReportTests(unittest.TestCase):
 
         summaries = {summary.target: summary for summary in report.error_summaries}
         self.assertEqual(summaries["org.example.ServiceA"].retry_count, 0)
-        self.assertEqual(summaries["org.example.ServiceA"].details[0].notes, "")
+        self.assertEqual([detail.notes for detail in summaries["org.example.ServiceA"].details], ["", ""])
         self.assertEqual(summaries["org.example.ServiceB"].retry_count, 1)
-        self.assertEqual(summaries["org.example.ServiceB"].details[0].notes, "retried within 5s")
+        self.assertEqual([detail.notes for detail in summaries["org.example.ServiceB"].details], ["", "retried within 5s"])
 
     def test_build_report_matches_errors_even_when_call_appears_later(self) -> None:
         events = [

@@ -87,7 +87,12 @@ class ErrorDetail:
     target_process: CaptureNameInfo | None
     latency_ms: str
     notes: str
-    count: int
+    count: int = 1
+    timestamp: float | None = None
+    destination: str = "<unknown-target>"
+    member: str = "<unknown>"
+    path: str = "-"
+    args_preview: str = "not captured"
 
     @property
     def owner_pid(self) -> int | None:

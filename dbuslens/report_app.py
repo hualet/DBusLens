@@ -123,7 +123,7 @@ def detail_columns(state: ReportAppState) -> tuple[str, ...]:
         return ("Count", "Operation")
     if state.active_view == "inbound":
         return ("Count", "Service", "Process")
-    return ("Count", "Caller", "Process", "Owner/PID", "Latency", "Notes")
+    return ("Time", "Sender", "Destination", "Member", "Args", "Latency", "Notes")
 
 
 def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
@@ -135,10 +135,11 @@ def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
     if state.active_view == "errors":
         return [
             (
-                str(row.count),
+                _format_timestamp(row.timestamp),
                 row.caller,
-                row.caller_process.display_name if row.caller_process else "-",
-                _capture_owner_text(row.target_process),
+                row.destination,
+                row.member,
+                row.args_preview,
                 row.latency_ms,
                 row.notes or "-",
             )
@@ -159,12 +160,13 @@ def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
         )
     if state.active_view == "errors":
         return (
-            8,
-            _width_for_column(("Caller",), rows, 1, minimum=18, maximum=48),
-            _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
-            _width_for_column(("Owner/PID",), rows, 3, minimum=18, maximum=48),
-            _width_for_column(("Latency",), rows, 4, minimum=12, maximum=24),
-            _width_for_column(("Notes",), rows, 5, minimum=12, maximum=48),
+            _width_for_column(("Time",), rows, 0, minimum=10, maximum=14),
+            _width_for_column(("Sender",), rows, 1, minimum=14, maximum=32),
+            _width_for_column(("Destination",), rows, 2, minimum=18, maximum=36),
+            _width_for_column(("Member",), rows, 3, minimum=12, maximum=28),
+            _width_for_column(("Args",), rows, 4, minimum=12, maximum=32),
+            _width_for_column(("Latency",), rows, 5, minimum=10, maximum=16),
+            _width_for_column(("Notes",), rows, 6, minimum=12, maximum=36),
         )
     return (
         8,

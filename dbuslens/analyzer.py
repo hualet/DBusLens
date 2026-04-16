@@ -289,14 +289,8 @@ def _build_error_summaries(
                 "last_seen": None,
                 "latency_total_ms": 0.0,
                 "latency_samples": 0,
-                "callers": defaultdict(
-                    lambda: {
-                        "count": 0,
-                        "latency_total_ms": 0.0,
-                        "latency_samples": 0,
-                        "failure_timestamps": [],
-                    }
-                ),
+                "caller_failures": defaultdict(list),
+                "details": [],
             },
         )
 
@@ -317,44 +311,63 @@ def _build_error_summaries(
         else:
             latency_ms = None
 
-        caller_bucket = bucket["callers"][caller_source]
-        caller_bucket["count"] = int(caller_bucket["count"]) + 1
+        detail_index = len(bucket["details"])
+        detail = {
+            "caller": caller_source,
+            "caller_process": _snapshot_info_for(caller_source, snapshot_index),
+            "latency_ms": _format_latency_ms(latency_ms),
+            "notes": "unmatched call" if original is None else "",
+            "count": 1,
+            "timestamp": event.timestamp,
+            "destination": target_source,
+            "member": _member_name_for(original, operation),
+            "path": original.path if original and original.path else "-",
+            "args_preview": "not captured",
+        }
+        bucket["details"].append(detail)
         if event.timestamp is not None:
-            caller_bucket["failure_timestamps"].append(event.timestamp)
-        if latency_ms is not None:
-            caller_bucket["latency_total_ms"] = float(caller_bucket["latency_total_ms"]) + latency_ms
-            caller_bucket["latency_samples"] = int(caller_bucket["latency_samples"]) + 1
+            bucket["caller_failures"][caller_source].append((event.timestamp, detail_index))
 
     summaries: list[ErrorSummary] = []
     for (error_name, target_source, operation), bucket in sorted(
         buckets.items(),
         key=lambda item: (-int(item[1]["count"]), item[0][0], item[0][1], item[0][2]),
     ):
-        callers = bucket["callers"]
+        caller_failures = bucket["caller_failures"]
         target_process = _snapshot_info_for(target_source, snapshot_index)
-        details: list[ErrorDetail] = []
         retry_count = 0
-        for caller, caller_bucket in sorted(
-            callers.items(),
-            key=lambda item: (-int(item[1]["count"]), item[0]),
-        ):
-            failure_timestamps = sorted(caller_bucket["failure_timestamps"])
-            retries = _count_retries(failure_timestamps)
-            retry_count += retries
-            avg_latency_ms = _average_latency_ms(
-                float(caller_bucket["latency_total_ms"]),
-                int(caller_bucket["latency_samples"]),
+        raw_details = bucket["details"]
+        for failures in caller_failures.values():
+            previous_timestamp = None
+            for timestamp, detail_index in sorted(failures, key=lambda item: item[0]):
+                if previous_timestamp is not None and timestamp - previous_timestamp <= 5.0:
+                    retry_count += 1
+                    notes = raw_details[detail_index]["notes"]
+                    raw_details[detail_index]["notes"] = _append_note(notes, "retried within 5s")
+                previous_timestamp = timestamp
+
+        details = [
+            ErrorDetail(
+                caller=str(detail["caller"]),
+                caller_process=detail["caller_process"],
+                target_process=target_process,
+                latency_ms=str(detail["latency_ms"]),
+                notes=str(detail["notes"]),
+                count=int(detail["count"]),
+                timestamp=detail["timestamp"],
+                destination=str(detail["destination"]),
+                member=str(detail["member"]),
+                path=str(detail["path"]),
+                args_preview=str(detail["args_preview"]),
             )
-            details.append(
-                ErrorDetail(
-                    caller=caller,
-                    caller_process=_snapshot_info_for(caller, snapshot_index),
-                    target_process=target_process,
-                    latency_ms=_format_latency_ms(avg_latency_ms),
-                    notes="retried within 5s" if retries else "",
-                    count=int(caller_bucket["count"]),
-                )
+            for detail in sorted(
+                raw_details,
+                key=lambda item: (
+                    float("inf") if item["timestamp"] is None else float(item["timestamp"]),
+                    str(item["caller"]),
+                ),
             )
+        ]
 
         average_latency_ms = _average_latency_ms(
             float(bucket["latency_total_ms"]),
@@ -370,7 +383,7 @@ def _build_error_summaries(
                 last_seen=bucket["last_seen"],
                 average_latency_ms=average_latency_ms,
                 retry_count=retry_count,
-                unique_callers=len(callers),
+                unique_callers=len(caller_failures),
                 target_process=target_process,
                 details=details,
             )
@@ -477,3 +490,19 @@ def _format_latency_ms(latency_ms: float | None) -> str:
     if latency_ms is None:
         return "n/a"
     return f"{latency_ms:.1f} ms"
+
+
+def _member_name_for(original: Event | None, operation: str) -> str:
+    if original is not None and original.member:
+        return original.member
+    if operation == UNKNOWN_OPERATION:
+        return "<unknown>"
+    return operation.rsplit(".", 1)[-1]
+
+
+def _append_note(existing: str, note: str) -> str:
+    if not existing:
+        return note
+    if note in existing:
+        return existing
+    return f"{existing}; {note}"
