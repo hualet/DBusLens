@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import ast
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -56,6 +57,48 @@ def _run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
                 stdout, stderr = process.communicate()
             exit_code = process.returncode or 0
     return stdout, stderr, exit_code
+
+
+def _parse_name_owner_changed_line(line: str) -> dict[str, object] | None:
+    if "member=NameOwnerChanged" not in line:
+        return None
+    match = re.search(r"time=(?P<timestamp>\d+(?:\.\d+)?)", line)
+    string_values = re.findall(r"string '([^']*)'", line)
+    if match is None or len(string_values) < 3:
+        return None
+    timestamp = float(match.group("timestamp"))
+    name, old_owner, new_owner = string_values[:3]
+    return {
+        "timestamp": timestamp,
+        "name": name,
+        "old_owner": old_owner,
+        "new_owner": new_owner,
+    }
+
+
+def _build_names_timeline(
+    *,
+    bus: str,
+    started_at: str,
+    ended_at: str,
+    initial_snapshot: dict[str, Any],
+    lines: list[str],
+    final_snapshot: dict[str, Any],
+    error: str | None,
+) -> dict[str, Any]:
+    return {
+        "bus": bus,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "initial_snapshot": initial_snapshot,
+        "events": [
+            event
+            for line in lines
+            if (event := _parse_name_owner_changed_line(line)) is not None
+        ],
+        "final_snapshot": final_snapshot,
+        "error": error,
+    }
 
 
 def _split_gdbus_items(text: str) -> list[str]:
@@ -374,8 +417,13 @@ def record_monitor(
 
     pcap_command = [monitor_path, f"--{bus}", "--pcap"]
     profile_command = [monitor_path, f"--{bus}", "--profile"]
+    timeline_command = [monitor_path, f"--{bus}"]
+    started_at_iso = datetime.now().astimezone().isoformat()
+    initial_snapshot = _capture_names(bus)
     stdout, stderr, exit_code = _run_monitor(pcap_command, duration)
     profile_stdout, profile_stderr, profile_exit_code = _run_monitor(profile_command, duration)
+    timeline_stdout, timeline_stderr, _ = _run_monitor(timeline_command, duration)
+    final_snapshot = _capture_names(bus)
 
     if exit_code not in {0, -15} and not stdout:
         stderr_text = stderr.decode("utf-8", "replace").strip()
@@ -387,6 +435,18 @@ def record_monitor(
     stderr_text = combined_stderr.decode("utf-8", "replace")
     if "BecomeMonitor" in stderr_text:
         monitor_mode = "eavesdrop"
+
+    ended_at_iso = datetime.now().astimezone().isoformat()
+    timeline_error = timeline_stderr.decode("utf-8", "replace").strip() or None
+    names_timeline = _build_names_timeline(
+        bus=bus,
+        started_at=started_at_iso,
+        ended_at=ended_at_iso,
+        initial_snapshot=initial_snapshot,
+        lines=timeline_stdout.decode("utf-8", "replace").splitlines(),
+        final_snapshot=final_snapshot,
+        error=timeline_error,
+    )
 
     write_bundle(
         output_path,
@@ -400,6 +460,7 @@ def record_monitor(
                     "pcap": "capture.cap",
                     "profile": "capture.profile",
                     "names": "names.json",
+                    "names_timeline": "names_timeline.json",
                 },
                 monitor={
                     "command": pcap_command,
@@ -411,7 +472,8 @@ def record_monitor(
             ),
             pcap_bytes=stdout,
             profile_text=profile_stdout.decode("utf-8", "replace"),
-            names=_capture_names(bus),
+            names=final_snapshot,
+            names_timeline=names_timeline,
         ),
     )
     return RecordResult(output_path=output_path, stderr=combined_stderr, exit_code=exit_code)

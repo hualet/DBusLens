@@ -8,10 +8,95 @@ from pathlib import Path
 from unittest.mock import patch
 
 from dbuslens.bundle import BundleContents, BundleMetadata, read_bundle, write_bundle
-from dbuslens.record import _capture_names
+from dbuslens.record import (
+    _build_names_timeline,
+    _capture_names,
+    _parse_name_owner_changed_line,
+    record_monitor,
+)
 
 
 class BundleRoundTripTests(unittest.TestCase):
+    def test_parse_name_owner_changed_line_extracts_fields(self) -> None:
+        line = (
+            "signal time=1713243600.500 sender=org.freedesktop.DBus -> destination=(null destination) "
+            "serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; "
+            "member=NameOwnerChanged string 'org.example.Service' string '' string ':1.42'"
+        )
+
+        self.assertEqual(
+            _parse_name_owner_changed_line(line),
+            {
+                "timestamp": 1713243600.5,
+                "name": "org.example.Service",
+                "old_owner": "",
+                "new_owner": ":1.42",
+            },
+        )
+
+    def test_build_names_timeline_document_records_initial_events_and_final_snapshot(self) -> None:
+        timeline = _build_names_timeline(
+            bus="session",
+            started_at="2026-04-16T10:20:30+08:00",
+            ended_at="2026-04-16T10:20:40+08:00",
+            initial_snapshot={"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},
+            lines=[
+                "signal time=1713243600.500 sender=org.freedesktop.DBus -> destination=(null destination) serial=4 "
+                "path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged "
+                "string 'org.example.Service' string '' string ':1.42'"
+            ],
+            final_snapshot={"captured_at": "2026-04-16T10:20:40+08:00", "bus": "session", "names": []},
+            error=None,
+        )
+
+        self.assertEqual(timeline["events"][0]["new_owner"], ":1.42")
+
+    def test_record_monitor_writes_names_timeline_metadata(self) -> None:
+        pcap_stdout = b"pcap-bytes"
+        profile_stdout = b"profile-bytes"
+        timeline_stdout = (
+            "signal time=1713243600.500 sender=org.freedesktop.DBus -> destination=(null destination) serial=4 "
+            "path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged "
+            "string 'org.example.Service' string '' string ':1.42'\n"
+        ).encode("utf-8")
+        monitor_calls = {"count": 0}
+        snapshot_calls = {"count": 0}
+
+        def fake_run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
+            del command, duration
+            if monitor_calls["count"] == 0:
+                monitor_calls["count"] += 1
+                return pcap_stdout, b"", 0
+            if monitor_calls["count"] == 1:
+                monitor_calls["count"] += 1
+                return profile_stdout, b"", 0
+            monitor_calls["count"] += 1
+            return timeline_stdout, b"timeline-warning", 0
+
+        def fake_capture_names(bus: str) -> dict[str, object]:
+            snapshot_calls["count"] += 1
+            captured_at = (
+                "2026-04-16T10:20:30+08:00"
+                if snapshot_calls["count"] == 1
+                else "2026-04-16T10:20:40+08:00"
+            )
+            return {"captured_at": captured_at, "bus": bus, "names": []}
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch(
+            "dbuslens.record.shutil.which", return_value="/usr/bin/dbus-monitor"
+        ), patch("dbuslens.record._run_monitor", side_effect=fake_run_monitor), patch(
+            "dbuslens.record._capture_names", side_effect=fake_capture_names
+        ), patch("dbuslens.record.write_bundle") as write_bundle_mock:
+            output_path = Path(tmpdir) / "capture.dblens"
+            record_monitor(bus="session", duration=10, output_path=output_path)
+
+        self.assertEqual(write_bundle_mock.call_count, 1)
+        contents = write_bundle_mock.call_args.args[1]
+        self.assertIsInstance(contents, BundleContents)
+        self.assertEqual(contents.metadata.capture_files["names_timeline"], "names_timeline.json")
+        self.assertIsNotNone(contents.names_timeline)
+        self.assertEqual(contents.names_timeline["events"][0]["new_owner"], ":1.42")
+
     def test_write_and_read_bundle_round_trip(self) -> None:
         metadata = BundleMetadata(
             bundle_version=1,
