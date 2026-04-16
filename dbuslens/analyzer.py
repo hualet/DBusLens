@@ -46,9 +46,7 @@ def build_report(
     for index, event in enumerate(events, start=1):
         if event.message_type == "error":
             error_name = event.error_name or "<unknown>"
-            original = None
-            if event.reply_serial is not None:
-                original = call_index.get((event.destination, event.sender, event.reply_serial))
+            original = _find_original_call(event, call_index, snapshot_index)
             target_name, _, operation_name = _build_error_identity(event, original)
             error_totals[error_name] += 1
             error_children[error_name][(target_name, operation_name)] += 1
@@ -277,9 +275,7 @@ def _build_error_summaries(
         if event.message_type != "error":
             continue
 
-        original = None
-        if event.reply_serial is not None:
-            original = call_index.get((event.destination, event.sender, event.reply_serial))
+        original = _find_original_call(event, call_index, snapshot_index)
 
         target_source, caller_source, operation = _build_error_identity(event, original)
         error_name = event.error_name or "<unknown>"
@@ -396,11 +392,61 @@ def _build_error_identity(event: Event, original: Event | None) -> tuple[str, st
     return target_name, caller_name, operation
 
 
+def _find_original_call(
+    event: Event,
+    call_index: dict[tuple[str | None, str | None, int], Event],
+    snapshot_index: dict[str, CaptureNameInfo],
+) -> Event | None:
+    if event.reply_serial is None:
+        return None
+
+    for destination in _match_candidates(event.destination, snapshot_index):
+        for sender in _match_candidates(event.sender, snapshot_index):
+            original = call_index.get((destination, sender, event.reply_serial))
+            if original is not None:
+                return original
+    return None
+
+
 def _snapshot_info_for(
     name: str,
     snapshot_index: dict[str, CaptureNameInfo],
 ) -> CaptureNameInfo | None:
     return snapshot_index.get(name)
+
+
+def _match_candidates(
+    name: str | None,
+    snapshot_index: dict[str, CaptureNameInfo],
+) -> tuple[str | None, ...]:
+    if name is None:
+        return (None,)
+
+    info = _snapshot_info_for(name, snapshot_index)
+    preferred = info.name if info is not None else None
+    owner = info.owner if info is not None else None
+
+    candidates: list[str | None] = [name]
+    for candidate in (preferred, owner):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    if name.startswith(":"):
+        for candidate in _well_known_names_for_owner(name, snapshot_index):
+            if candidate not in candidates:
+                candidates.append(candidate)
+    return tuple(candidates)
+
+
+def _well_known_names_for_owner(
+    owner: str,
+    snapshot_index: dict[str, CaptureNameInfo],
+) -> tuple[str, ...]:
+    names = {
+        info.name
+        for info in snapshot_index.values()
+        if info.owner == owner and not info.name.startswith(":")
+    }
+    return tuple(sorted(names))
 
 
 def _prefer_snapshot_alias(candidate: CaptureNameInfo, current: CaptureNameInfo) -> bool:

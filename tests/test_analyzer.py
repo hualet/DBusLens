@@ -781,6 +781,63 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(summary.average_latency_ms, 500.0)
         self.assertEqual(summary.details[0].caller, ":1.10")
 
+    def test_build_report_matches_error_reply_when_error_uses_unique_owner_name(self) -> None:
+        events = [
+            Event(
+                timestamp=2.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=17,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.5,
+                message_type="error",
+                sender=":1.42",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=18,
+                reply_serial=17,
+                error_name="org.example.Error.Failed",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(
+                {
+                    "name": "org.example.Service",
+                    "owner": ":1.42",
+                    "pid": 2020,
+                    "uid": 1000,
+                    "cmdline": ["/usr/bin/example-service"],
+                    "error": None,
+                },
+                {
+                    "name": "org.example.Client",
+                    "owner": ":1.10",
+                    "pid": 1010,
+                    "uid": 1000,
+                    "cmdline": ["/usr/bin/example-client"],
+                    "error": None,
+                },
+            ),
+        )
+
+        self.assertEqual(len(report.error_summaries), 1)
+        summary = report.error_summaries[0]
+        self.assertEqual(summary.target, "org.example.Service")
+        self.assertEqual(summary.operation, "org.example.Demo.Ping")
+        self.assertEqual(summary.average_latency_ms, 500.0)
+        self.assertEqual(summary.owner_label, "org.example.Service [2020]")
+
 
 if __name__ == "__main__":
     unittest.main()
