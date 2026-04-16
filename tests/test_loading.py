@@ -5,6 +5,7 @@ from pathlib import Path
 from dbus_fast.constants import MessageType
 from dbus_fast.message import Message
 
+from dbuslens.bundle import BundleContents, BundleMetadata, write_bundle
 from dbuslens.loading import load_report
 from tests.test_pcap_parser import build_pcap_bytes
 
@@ -30,8 +31,32 @@ class LoadReportTests(unittest.TestCase):
         updates: list[tuple[str, int, int]] = []
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "sample.cap"
-            path.write_bytes(capture)
+            path = Path(tmpdir) / "sample.dblens"
+            write_bundle(
+                path,
+                BundleContents(
+                    metadata=BundleMetadata(
+                        bundle_version=1,
+                        created_at="2026-04-16T10:20:30+08:00",
+                        bus="session",
+                        duration_seconds=10,
+                        capture_files={
+                            "pcap": "capture.cap",
+                            "profile": "capture.profile",
+                            "names": "names.json",
+                        },
+                        monitor={
+                            "command": ["dbus-monitor", "--session", "--pcap"],
+                            "profile_command": ["dbus-monitor", "--session", "--profile"],
+                            "stderr": "",
+                            "mode": "monitor",
+                        },
+                    ),
+                    pcap_bytes=capture,
+                    profile_text="",
+                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                ),
+            )
 
             report = load_report(
                 path,
@@ -68,8 +93,32 @@ class LoadReportTests(unittest.TestCase):
         updates: list[tuple[str, int, int]] = []
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "sample.cap"
-            path.write_bytes(capture)
+            path = Path(tmpdir) / "sample.dblens"
+            write_bundle(
+                path,
+                BundleContents(
+                    metadata=BundleMetadata(
+                        bundle_version=1,
+                        created_at="2026-04-16T10:20:30+08:00",
+                        bus="session",
+                        duration_seconds=10,
+                        capture_files={
+                            "pcap": "capture.cap",
+                            "profile": "capture.profile",
+                            "names": "names.json",
+                        },
+                        monitor={
+                            "command": ["dbus-monitor", "--session", "--pcap"],
+                            "profile_command": ["dbus-monitor", "--session", "--profile"],
+                            "stderr": "",
+                            "mode": "monitor",
+                        },
+                    ),
+                    pcap_bytes=capture,
+                    profile_text="",
+                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                ),
+            )
 
             load_report(
                 path,
@@ -79,6 +128,82 @@ class LoadReportTests(unittest.TestCase):
             )
 
         self.assertLess(len(updates), 18)
+
+    def test_load_report_reads_bundle_input(self) -> None:
+        capture = build_pcap_bytes(
+            [
+                (
+                    1713081000.1,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender=":1.10",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Ping",
+                        serial=17,
+                    ),
+                )
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sample.dblens"
+            write_bundle(
+                path,
+                BundleContents(
+                    metadata=BundleMetadata(
+                        bundle_version=1,
+                        created_at="2026-04-16T10:20:30+08:00",
+                        bus="session",
+                        duration_seconds=10,
+                        capture_files={
+                            "pcap": "capture.cap",
+                            "profile": "capture.profile",
+                            "names": "names.json",
+                        },
+                        monitor={
+                            "command": ["dbus-monitor", "--session", "--pcap"],
+                            "profile_command": ["dbus-monitor", "--session", "--profile"],
+                            "stderr": "",
+                            "mode": "monitor",
+                        },
+                    ),
+                    pcap_bytes=capture,
+                    profile_text="",
+                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                ),
+            )
+
+            report = load_report(path)
+
+        self.assertEqual(report.source_path, str(path))
+        self.assertEqual(report.total_events, 1)
+
+    def test_load_report_rejects_legacy_cap_input(self) -> None:
+        capture = build_pcap_bytes(
+            [
+                (
+                    1713081000.1,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender=":1.10",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Ping",
+                        serial=17,
+                    ),
+                )
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "legacy.cap"
+            path.write_bytes(capture)
+
+            with self.assertRaisesRegex(ValueError, "only \\.dblens captures are supported"):
+                load_report(path)
 
 
 if __name__ == "__main__":

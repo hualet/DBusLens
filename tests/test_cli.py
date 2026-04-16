@@ -1,8 +1,9 @@
 import unittest
+from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
-from dbuslens.cli import build_parser
+from dbuslens.cli import _handle_record, _handle_report, build_parser
 from dbuslens.record import build_default_output_path
 from dbuslens.tui import DBusLensReportApp
 from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
@@ -18,18 +19,26 @@ class CliHelpersTests(unittest.TestCase):
         self.assertEqual(record_args.command, "record")
         self.assertEqual(record_args.bus, "session")
         self.assertEqual(record_args.duration, 10)
-        self.assertEqual(record_args.output, "record.cap")
+        self.assertEqual(record_args.output, "record.dblens")
         self.assertEqual(report_args.command, "report")
-        self.assertEqual(report_args.input, "record.cap")
+        self.assertEqual(report_args.input, "record.dblens")
 
-    def test_build_default_output_path_returns_record_cap_in_workdir(self) -> None:
+    def test_build_default_output_path_returns_record_dblens_in_workdir(self) -> None:
         path = build_default_output_path(
             "session",
             now=datetime(2026, 4, 14, 16, 30, 5),
             base_dir=Path("/tmp"),
         )
 
-        self.assertEqual(path, Path("/tmp/record.cap"))
+        self.assertEqual(path, Path("/tmp/record.dblens"))
+
+    def test_handle_record_rejects_non_bundle_output(self) -> None:
+        with self.assertRaisesRegex(ValueError, "record output must use the \\.dblens extension"):
+            _handle_record(Namespace(bus="session", duration=10, output="record.cap"))
+
+    def test_handle_report_rejects_non_bundle_input(self) -> None:
+        with self.assertRaisesRegex(ValueError, "report input must use the \\.dblens extension"):
+            _handle_report(Namespace(input="record.cap"))
 
 
 class ReportAppConstructionTests(unittest.TestCase):

@@ -4,7 +4,7 @@
 
 # DBusLens
 
-DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It helps you capture `.pcap` traces, open them in a Textual UI, and quickly understand who is sending messages, which members are busiest, and where errors are happening.
+DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It stores captures as `.dblens` bundles, opens them in a Textual UI, and helps you quickly understand who is sending messages, which members are busiest, and where errors are happening.
 
 ## Highlights
 
@@ -40,32 +40,36 @@ Record a capture:
 
 ```bash
 uv run dbuslens record --duration 10
-uv run dbuslens record --bus system --duration 60 --output /tmp/system.pcap
+uv run dbuslens record --bus system --duration 60 --output /tmp/system.dblens
 ```
 
 Open a saved capture in the terminal UI:
 
 ```bash
 uv run dbuslens report
-uv run dbuslens report --input /tmp/system.pcap
+uv run dbuslens report --input /tmp/system.dblens
 ```
+
+Format reference:
+
+- [`docs/dblens-format.md`](./docs/dblens-format.md)
 
 ## Operation Guide
 
 `dbuslens` has two main commands:
 
-- `record`: start a timed D-Bus capture and save it as a `.pcap` file
-- `report`: open a saved capture in the Textual report UI
+- `record`: start a timed D-Bus capture and save it as a `.dblens` bundle
+- `report`: open a saved `.dblens` bundle in the Textual report UI
 
 Default behavior:
 
 - `record` uses the `session` bus by default
-- `report` reads `record.cap` by default
+- `report` reads `record.dblens` by default
 
 Typical workflow:
 
 1. Record traffic during the period you want to observe.
-2. Open the saved capture with `report`.
+2. Open the saved `.dblens` bundle with `report`.
 3. Switch between `Senders`, `Members`, and `Errors`.
 4. Move through the table and inspect the detail pane for the selected row.
 

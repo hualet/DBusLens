@@ -12,13 +12,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dbuslens")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    record_parser = subparsers.add_parser("record", help="record dbus-monitor output")
+    record_parser = subparsers.add_parser("record", help="record a dbus capture bundle")
     record_parser.add_argument("--bus", choices=["system", "session"], default="session")
     record_parser.add_argument("--duration", type=int, required=True)
-    record_parser.add_argument("--output", default="record.cap")
+    record_parser.add_argument("--output", default="record.dblens")
 
-    report_parser = subparsers.add_parser("report", help="report a saved pcap capture")
-    report_parser.add_argument("--input", default="record.cap")
+    report_parser = subparsers.add_parser("report", help="report a saved capture")
+    report_parser.add_argument("--input", default="record.dblens")
 
     return parser
 
@@ -39,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _handle_record(args: argparse.Namespace) -> int:
     output_path = Path(args.output) if args.output else build_default_output_path(args.bus)
+    if output_path.suffix != ".dblens":
+        raise ValueError("record output must use the .dblens extension")
     result = record_monitor(bus=args.bus, duration=args.duration, output_path=output_path)
     print(result.output_path)
     stderr_text = result.stderr.decode("utf-8", "replace").strip()
@@ -49,6 +51,8 @@ def _handle_record(args: argparse.Namespace) -> int:
 
 def _handle_report(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
+    if input_path.suffix != ".dblens":
+        raise ValueError("report input must use the .dblens extension")
     if not input_path.exists():
         raise ValueError(f"input file not found: {input_path}")
     if input_path.stat().st_size == 0:

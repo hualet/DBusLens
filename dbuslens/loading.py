@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Callable
 
 from dbuslens.analyzer import build_report
+from dbuslens.bundle import read_bundle
 from dbuslens.models import AnalysisReport
-from dbuslens.pcap_parser import parse_pcap_file
+from dbuslens.pcap_parser import parse_pcap_bytes
 
 
 @dataclass(frozen=True)
@@ -73,15 +74,12 @@ def load_report(
 ) -> AnalysisReport:
     tracker = ProgressTracker(progress_callback)
     tracker.emit_stage("Opening capture", 0, 1)
+    if input_path.suffix != ".dblens":
+        raise ValueError("only .dblens captures are supported")
 
-    parsed = parse_pcap_file(
-        input_path,
-        progress_callback=lambda current, total: tracker.emit_stage(
-            "Parsing capture",
-            current,
-            total,
-        ),
-    )
+    bundle = read_bundle(input_path)
+    parsed = parse_pcap_bytes(bundle.pcap_bytes)
+    tracker.emit_stage("Parsing capture", 100, 100)
 
     event_total = max(len(parsed.events), 1)
     report = build_report(
