@@ -3,7 +3,15 @@ import unittest
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Footer, Header, ListView, ProgressBar, Static
 
-from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
+from dbuslens.models import (
+    AnalysisReport,
+    CaptureNameInfo,
+    DetailRow,
+    ErrorDetail,
+    ErrorSummary,
+    ProcessInfo,
+    Row,
+)
 from dbuslens.tui import DBusLensLoaderApp, DBusLensReportApp
 
 
@@ -205,17 +213,45 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             skipped_blocks=0,
             outbound_rows=[],
             inbound_rows=[],
-            error_rows=[
-                Row(
-                    name="org.freedesktop.DBus.Error.NameHasNoOwner",
-                    process=None,
+            error_rows=[],
+            error_summaries=[
+                ErrorSummary(
+                    error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                    target="org.example.Service",
+                    operation="org.freedesktop.DBus.GetNameOwner",
                     count=1,
-                    children=[
-                        DetailRow(
-                            name=":1.10",
-                            process=ProcessInfo(short_name="demo-client", pid=1010),
+                    first_seen=1.0,
+                    last_seen=1.0,
+                    average_latency_ms=250.0,
+                    retry_count=0,
+                    unique_callers=1,
+                    target_process=CaptureNameInfo(
+                        name="org.example.Service",
+                        owner=":1.42",
+                        pid=4242,
+                        uid=1000,
+                        cmdline=["/usr/bin/demo-service"],
+                    ),
+                    details=[
+                        ErrorDetail(
+                            caller=":1.10",
+                            caller_process=CaptureNameInfo(
+                                name=":1.10",
+                                owner=":1.10",
+                                pid=1010,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-client"],
+                            ),
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            latency_ms="250.0 ms",
+                            notes="",
                             count=1,
-                            secondary="org.freedesktop.DBus.GetNameOwner",
                         )
                     ],
                 )
@@ -224,6 +260,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         app = DBusLensReportApp(report)
 
         async with app.run_test() as pilot:
+            detail = app.query_one("#detail-pane", Static)
             await pilot.press("e")
             await pilot.pause()
 
@@ -233,7 +270,12 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.state.active_view, "errors")
             self.assertEqual(main_table.border_title, " errors ")
             self.assertEqual(detail_table.border_title, " details ")
+            self.assertEqual(main_table.row_count, 1)
             self.assertEqual(detail_table.row_count, 1)
+            self.assertIn(
+                "Target owner at capture time: :1.42 [4242]",
+                str(detail.render()),
+            )
 
     async def test_textual_ui_supports_sender_and_member_shortcuts(self) -> None:
         report = AnalysisReport(

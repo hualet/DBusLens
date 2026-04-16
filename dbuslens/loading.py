@@ -86,6 +86,7 @@ def load_report(
         parsed.events,
         source_path=str(input_path),
         skipped_blocks=parsed.skipped_packets,
+        snapshot_names=bundle.names,
         progress_callback=lambda current, total: tracker.emit_stage(
             "Analyzing events",
             current,

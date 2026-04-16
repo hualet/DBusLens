@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dbuslens.models import AnalysisReport, Row
+from dbuslens.models import AnalysisReport, CaptureNameInfo, ErrorSummary, Row
 
 
 @dataclass
@@ -20,13 +20,13 @@ class ReportAppState:
         self.selected_index = 0
 
     @property
-    def current_row(self) -> Row | None:
+    def current_row(self) -> Row | ErrorSummary | None:
         rows = (
             self.report.outbound_rows
             if self.active_view == "outbound"
             else self.report.inbound_rows
             if self.active_view == "inbound"
-            else self.report.error_rows
+            else self.report.error_summaries
         )
         if self.selected_index < 0 or self.selected_index >= len(rows):
             return None
@@ -38,16 +38,16 @@ def main_columns(state: ReportAppState) -> tuple[str, ...]:
         return ("Count", "Service", "Process")
     if state.active_view == "inbound":
         return ("Count", "Operation")
-    return ("Count", "Error")
+    return ("Count", "Error", "Target", "Operation")
 
 
-def current_rows(state: ReportAppState) -> list[Row]:
+def current_rows(state: ReportAppState) -> list[Row | ErrorSummary]:
     return (
         state.report.outbound_rows
         if state.active_view == "outbound"
         else state.report.inbound_rows
         if state.active_view == "inbound"
-        else state.report.error_rows
+        else state.report.error_summaries
     )
 
 
@@ -59,7 +59,10 @@ def main_rows(state: ReportAppState) -> list[tuple[str, ...]]:
             for row in rows
         ]
     if state.active_view == "errors":
-        return [(str(row.count), row.name) for row in rows]
+        return [
+            (str(row.count), row.error_name, row.target, row.operation)
+            for row in rows
+        ]
     return [(str(row.count), row.name) for row in rows]
 
 
@@ -75,6 +78,8 @@ def main_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
         return (
             8,
             _width_for_column(("Error",), rows, 1, minimum=28, maximum=72),
+            _width_for_column(("Target",), rows, 2, minimum=18, maximum=48),
+            _width_for_column(("Operation",), rows, 3, minimum=24, maximum=96),
         )
     return (
         8,
@@ -86,6 +91,20 @@ def detail_lines(state: ReportAppState) -> list[str]:
     current = state.current_row
     if current is None:
         return ["No detail available."]
+
+    if state.active_view == "errors" and isinstance(current, ErrorSummary):
+        return [
+            f"Selected: {current.error_name}",
+            f"Target: {current.target}",
+            f"Operation: {current.operation}",
+            f"Count: {current.count}",
+            f"First seen: {_format_timestamp(current.first_seen)}",
+            f"Last seen: {_format_timestamp(current.last_seen)}",
+            f"Average latency: {_format_latency(current.average_latency_ms)}",
+            f"Retries detected: {current.retry_count}",
+            f"Unique callers: {current.unique_callers}",
+            f"Target owner at capture time: {_capture_owner_text(current.target_process)}",
+        ]
 
     lines = [f"Selected: {current.name}", f"Count: {current.count}"]
     if current.process:
@@ -104,7 +123,7 @@ def detail_columns(state: ReportAppState) -> tuple[str, ...]:
         return ("Count", "Operation")
     if state.active_view == "inbound":
         return ("Count", "Service", "Process")
-    return ("Count", "Service", "Process", "Operation")
+    return ("Count", "Caller", "Process", "Owner/PID", "Latency", "Notes")
 
 
 def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
@@ -117,11 +136,13 @@ def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
         return [
             (
                 str(row.count),
-                row.name,
-                row.process.display_name if row.process else "-",
-                row.secondary or "<unknown>",
+                row.caller,
+                row.caller_process.display_name if row.caller_process else "-",
+                _capture_owner_text(row.target_process),
+                row.latency_ms,
+                row.notes or "-",
             )
-            for row in current.children
+            for row in current.details
         ]
     return [
         (str(row.count), row.name, row.process.display_name if row.process else "-")
@@ -139,9 +160,11 @@ def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
     if state.active_view == "errors":
         return (
             8,
-            _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
+            _width_for_column(("Caller",), rows, 1, minimum=18, maximum=48),
             _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
-            _width_for_column(("Operation",), rows, 3, minimum=24, maximum=96),
+            _width_for_column(("Owner/PID",), rows, 3, minimum=18, maximum=48),
+            _width_for_column(("Latency",), rows, 4, minimum=12, maximum=24),
+            _width_for_column(("Notes",), rows, 5, minimum=12, maximum=48),
         )
     return (
         8,
@@ -170,3 +193,24 @@ def _width_for_column(
     candidates = [len(header) for header in headers]
     candidates.extend(len(row[index]) for row in rows if len(row) > index)
     return min(max(max(candidates, default=minimum) + 2, minimum), maximum)
+
+
+def _capture_owner_text(info: CaptureNameInfo | None) -> str:
+    if info is None:
+        return "-"
+    owner = info.owner or info.name
+    if info.pid is None:
+        return owner
+    return f"{owner} [{info.pid}]"
+
+
+def _format_timestamp(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.3f}s"
+
+
+def _format_latency(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.1f} ms"

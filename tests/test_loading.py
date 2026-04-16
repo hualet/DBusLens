@@ -54,7 +54,20 @@ class LoadReportTests(unittest.TestCase):
                     ),
                     pcap_bytes=capture,
                     profile_text="",
-                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                    names={
+                        "captured_at": "2026-04-16T10:20:31+08:00",
+                        "bus": "session",
+                        "names": [
+                            {
+                                "name": "org.example.Service",
+                                "owner": ":1.42",
+                                "pid": 4242,
+                                "uid": 1000,
+                                "cmdline": ["/usr/bin/example-service", "--session"],
+                                "error": None,
+                            }
+                        ],
+                    },
                 ),
             )
 
@@ -116,7 +129,20 @@ class LoadReportTests(unittest.TestCase):
                     ),
                     pcap_bytes=capture,
                     profile_text="",
-                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                    names={
+                        "captured_at": "2026-04-16T10:20:31+08:00",
+                        "bus": "session",
+                        "names": [
+                            {
+                                "name": "org.example.Service",
+                                "owner": ":1.42",
+                                "pid": 4242,
+                                "uid": 1000,
+                                "cmdline": ["/usr/bin/example-service", "--session"],
+                                "error": None,
+                            }
+                        ],
+                    },
                 ),
             )
 
@@ -142,6 +168,17 @@ class LoadReportTests(unittest.TestCase):
                         interface="org.example.Demo",
                         member="Ping",
                         serial=17,
+                    ),
+                ),
+                (
+                    1713081000.3,
+                    Message(
+                        message_type=MessageType.ERROR,
+                        sender="org.example.Service",
+                        destination=":1.10",
+                        reply_serial=17,
+                        error_name="org.example.Error.Failed",
+                        serial=18,
                     ),
                 )
             ]
@@ -171,14 +208,30 @@ class LoadReportTests(unittest.TestCase):
                     ),
                     pcap_bytes=capture,
                     profile_text="",
-                    names={"captured_at": "2026-04-16T10:20:31+08:00", "names": []},
+                    names={
+                        "captured_at": "2026-04-16T10:20:31+08:00",
+                        "bus": "session",
+                        "names": [
+                            {
+                                "name": "org.example.Service",
+                                "owner": ":1.42",
+                                "pid": 4242,
+                                "uid": 1000,
+                                "cmdline": ["/usr/bin/example-service", "--session"],
+                                "error": None,
+                            }
+                        ],
+                    },
                 ),
             )
 
             report = load_report(path)
 
         self.assertEqual(report.source_path, str(path))
-        self.assertEqual(report.total_events, 1)
+        self.assertEqual(report.total_events, 2)
+        self.assertEqual(len(report.error_summaries), 1)
+        self.assertEqual(report.error_summaries[0].target, "org.example.Service")
+        self.assertEqual(report.error_summaries[0].target_process.display_name, "org.example.Service [4242]")
 
     def test_load_report_rejects_legacy_cap_input(self) -> None:
         capture = build_pcap_bytes(

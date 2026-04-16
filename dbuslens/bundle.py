@@ -66,6 +66,7 @@ def is_bundle_path(path: Path) -> bool:
 
 
 def write_bundle(path: Path, contents: BundleContents) -> None:
+    """Write the bundle archive, preserving the `names.json` snapshot payload verbatim."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("meta.json", json.dumps(contents.metadata.to_dict(), indent=2, sort_keys=True))

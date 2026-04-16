@@ -1,6 +1,14 @@
 import unittest
 
-from dbuslens.models import AnalysisReport, DetailRow, ProcessInfo, Row
+from dbuslens.models import (
+    AnalysisReport,
+    CaptureNameInfo,
+    DetailRow,
+    ErrorDetail,
+    ErrorSummary,
+    ProcessInfo,
+    Row,
+)
 from dbuslens.report_app import (
     ReportAppState,
     detail_columns,
@@ -42,17 +50,45 @@ def _make_report() -> AnalysisReport:
                 ],
             )
         ],
-        error_rows=[
-            Row(
-                name="org.freedesktop.DBus.Error.NameHasNoOwner",
-                process=None,
+        error_rows=[],
+        error_summaries=[
+            ErrorSummary(
+                error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                target="org.example.Service",
+                operation="org.freedesktop.DBus.GetNameOwner",
                 count=1,
-                children=[
-                    DetailRow(
-                        name="svc",
-                        process=ProcessInfo(short_name="demo", pid=4321),
+                first_seen=1.0,
+                last_seen=1.0,
+                average_latency_ms=250.0,
+                retry_count=0,
+                unique_callers=1,
+                target_process=CaptureNameInfo(
+                    name="org.example.Service",
+                    owner=":1.42",
+                    pid=4242,
+                    uid=1000,
+                    cmdline=["/usr/bin/demo-service"],
+                ),
+                details=[
+                    ErrorDetail(
+                        caller=":1.10",
+                        caller_process=CaptureNameInfo(
+                            name=":1.10",
+                            owner=":1.10",
+                            pid=1010,
+                            uid=1000,
+                            cmdline=["/usr/bin/demo-client"],
+                        ),
+                        target_process=CaptureNameInfo(
+                            name="org.example.Service",
+                            owner=":1.42",
+                            pid=4242,
+                            uid=1000,
+                            cmdline=["/usr/bin/demo-service"],
+                        ),
+                        latency_ms="250.0 ms",
+                        notes="",
                         count=1,
-                        secondary="org.freedesktop.DBus.GetNameOwner",
                     )
                 ],
             )
@@ -79,8 +115,8 @@ class ReportAppStateTests(unittest.TestCase):
         state.set_view("errors")
 
         self.assertEqual(state.active_view, "errors")
-        self.assertEqual(state.current_row.name, "org.freedesktop.DBus.Error.NameHasNoOwner")
-        self.assertEqual(main_columns(state), ("Count", "Error"))
+        self.assertEqual(state.current_row.error_name, "org.freedesktop.DBus.Error.NameHasNoOwner")
+        self.assertEqual(main_columns(state), ("Count", "Error", "Target", "Operation"))
 
     def test_current_row_returns_none_for_empty_or_out_of_range_selection(self) -> None:
         report = _make_report()
@@ -131,13 +167,30 @@ class ReportAppStateTests(unittest.TestCase):
 
         state.set_view("errors")
 
-        self.assertEqual(main_rows(state), [("1", "org.freedesktop.DBus.Error.NameHasNoOwner")])
+        self.assertEqual(
+            main_rows(state),
+            [
+                (
+                    "1",
+                    "org.freedesktop.DBus.Error.NameHasNoOwner",
+                    "org.example.Service",
+                    "org.freedesktop.DBus.GetNameOwner",
+                )
+            ],
+        )
         self.assertEqual(
             detail_lines(state),
             [
                 "Selected: org.freedesktop.DBus.Error.NameHasNoOwner",
+                "Target: org.example.Service",
+                "Operation: org.freedesktop.DBus.GetNameOwner",
                 "Count: 1",
-                "Details: 1 row(s)",
+                "First seen: 1.000s",
+                "Last seen: 1.000s",
+                "Average latency: 250.0 ms",
+                "Retries detected: 0",
+                "Unique callers: 1",
+                "Target owner at capture time: :1.42 [4242]",
             ],
         )
 
@@ -177,23 +230,65 @@ class ReportAppStateTests(unittest.TestCase):
                     ],
                 )
             ],
-            error_rows=[
-                Row(
-                    name="org.freedesktop.DBus.Error.NameHasNoOwner",
-                    process=None,
+            error_rows=[],
+            error_summaries=[
+                ErrorSummary(
+                    error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
+                    target="org.example.Service",
+                    operation="org.freedesktop.DBus.GetNameOwner",
                     count=2,
-                    children=[
-                        DetailRow(
-                            name="svc-a",
-                            process=ProcessInfo(short_name="proc-a", pid=1001),
+                    first_seen=1.0,
+                    last_seen=2.0,
+                    average_latency_ms=250.0,
+                    retry_count=1,
+                    unique_callers=2,
+                    target_process=CaptureNameInfo(
+                        name="org.example.Service",
+                        owner=":1.42",
+                        pid=4242,
+                        uid=1000,
+                        cmdline=["/usr/bin/demo-service"],
+                    ),
+                    details=[
+                        ErrorDetail(
+                            caller=":1.10",
+                            caller_process=CaptureNameInfo(
+                                name=":1.10",
+                                owner=":1.10",
+                                pid=1010,
+                                uid=1000,
+                                cmdline=["/usr/bin/proc-a"],
+                            ),
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            latency_ms="125.0 ms",
+                            notes="retried within 5s",
                             count=1,
-                            secondary="org.freedesktop.DBus.GetNameOwner",
                         ),
-                        DetailRow(
-                            name="svc-b",
-                            process=ProcessInfo(short_name="proc-b", pid=1002),
+                        ErrorDetail(
+                            caller=":1.11",
+                            caller_process=CaptureNameInfo(
+                                name=":1.11",
+                                owner=":1.11",
+                                pid=1011,
+                                uid=1000,
+                                cmdline=["/usr/bin/proc-b"],
+                            ),
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            latency_ms="375.0 ms",
+                            notes="",
                             count=1,
-                            secondary="org.freedesktop.DBus.GetConnectionUnixProcessID",
                         ),
                     ],
                 )
@@ -214,12 +309,15 @@ class ReportAppStateTests(unittest.TestCase):
 
         state.set_view("errors")
 
-        self.assertEqual(detail_columns(state), ("Count", "Service", "Process", "Operation"))
+        self.assertEqual(
+            detail_columns(state),
+            ("Count", "Caller", "Process", "Owner/PID", "Latency", "Notes"),
+        )
         self.assertEqual(
             detail_rows(state),
             [
-                ("1", "svc-a", "proc-a [1001]", "org.freedesktop.DBus.GetNameOwner"),
-                ("1", "svc-b", "proc-b [1002]", "org.freedesktop.DBus.GetConnectionUnixProcessID"),
+                ("1", ":1.10", ":1.10 [1010]", ":1.42 [4242]", "125.0 ms", "retried within 5s"),
+                ("1", ":1.11", ":1.11 [1011]", ":1.42 [4242]", "375.0 ms", "-"),
             ],
         )
 

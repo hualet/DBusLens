@@ -11,7 +11,7 @@ DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It store
 - Record D-Bus traffic from the `session` or `system` bus with a fixed duration.
 - Open saved captures in a terminal UI built for quick inspection.
 - Browse traffic by `Senders`, `Members`, and `Errors`.
-- Use the detail pane to inspect row-level context without leaving the terminal.
+- Use the detail pane to inspect row-level context and capture-time error diagnostics without leaving the terminal.
 - Keep analysis workflow simple: capture first, report later.
 
 ## Screenshots
@@ -71,7 +71,7 @@ Typical workflow:
 1. Record traffic during the period you want to observe.
 2. Open the saved `.dblens` bundle with `report`.
 3. Switch between `Senders`, `Members`, and `Errors`.
-4. Move through the table and inspect the detail pane for the selected row.
+4. Move through the table and inspect the detail pane for the selected row or error summary.
 
 ## Keyboard Shortcuts
 

@@ -3,13 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import ast
-import json
 from pathlib import Path
 import shutil
 import subprocess
+import time
 from typing import Any
 
 from dbuslens.bundle import BundleContents, BundleMetadata, write_bundle
+
+
+_GDBUS_TIMEOUT_SECONDS = 5
+_SNAPSHOT_BUDGET_SECONDS = 5
 
 
 @dataclass(frozen=True)
@@ -54,43 +58,302 @@ def _run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
     return stdout, stderr, exit_code
 
 
+def _split_gdbus_items(text: str) -> list[str]:
+    items: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for char in text:
+        if quote is not None:
+            current.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        if char == "," and depth == 0:
+            item = "".join(current).strip()
+            if item:
+                items.append(item)
+            current = []
+            continue
+        current.append(char)
+    item = "".join(current).strip()
+    if item:
+        items.append(item)
+    return items
+
+
+def _parse_gdbus_value(text: str) -> Any:
+    text = text.strip()
+    if not text:
+        return None
+    if text in {"true", "false"}:
+        return text == "true"
+    if text[0] in {"'", '"'}:
+        return ast.literal_eval(text)
+    if text.startswith("[") and text.endswith("]"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_gdbus_value(item) for item in _split_gdbus_items(inner)]
+    if text.startswith("(") and text.endswith(")"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return tuple()
+        values = [_parse_gdbus_value(item) for item in _split_gdbus_items(inner)]
+        return values[0] if len(values) == 1 else tuple(values)
+    if " " in text:
+        prefix, remainder = text.split(" ", 1)
+        if prefix in {
+            "byte",
+            "int16",
+            "uint16",
+            "int32",
+            "uint32",
+            "int64",
+            "uint64",
+            "double",
+            "string",
+        }:
+            if prefix == "string":
+                return remainder
+            return int(remainder)
+    return text
+
+
+def _run_gdbus_call(
+    gdbus_path: str,
+    bus: str,
+    method: str,
+    *arguments: str,
+    timeout_seconds: float | None = None,
+) -> subprocess.CompletedProcess[str] | None:
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        return None
+    effective_timeout = _GDBUS_TIMEOUT_SECONDS if timeout_seconds is None else min(_GDBUS_TIMEOUT_SECONDS, timeout_seconds)
+    try:
+        return subprocess.run(
+            [
+                gdbus_path,
+                "call",
+                f"--{bus}",
+                "--dest",
+                "org.freedesktop.DBus",
+                "--object-path",
+                "/org/freedesktop/DBus",
+                "--method",
+                method,
+                *arguments,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=effective_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _lookup_name_owner(
+    gdbus_path: str,
+    bus: str,
+    name: str,
+    *,
+    timeout_seconds: float | None = None,
+) -> tuple[str | None, str | None]:
+    if name.startswith(":"):
+        return name, None
+    result = _run_gdbus_call(
+        gdbus_path,
+        bus,
+        "org.freedesktop.DBus.GetNameOwner",
+        name,
+        timeout_seconds=timeout_seconds,
+    )
+    if result is None:
+        return None, "GetNameOwner timed out"
+    if result.returncode != 0:
+        return None, result.stderr.strip() or "GetNameOwner failed"
+    try:
+        owner = _parse_gdbus_value(result.stdout.strip())
+    except (ValueError, SyntaxError):
+        return None, "GetNameOwner parse failed"
+    if not isinstance(owner, str) or not owner:
+        return None, "GetNameOwner parse failed"
+    return owner, None
+
+
+def _lookup_name_pid(
+    gdbus_path: str,
+    bus: str,
+    owner: str,
+    *,
+    timeout_seconds: float | None = None,
+) -> tuple[int | None, str | None]:
+    result = _run_gdbus_call(
+        gdbus_path,
+        bus,
+        "org.freedesktop.DBus.GetConnectionUnixProcessID",
+        owner,
+        timeout_seconds=timeout_seconds,
+    )
+    if result is None:
+        return None, "GetConnectionUnixProcessID timed out"
+    if result.returncode != 0:
+        return None, result.stderr.strip() or "GetConnectionUnixProcessID failed"
+    try:
+        pid = _parse_gdbus_value(result.stdout.strip())
+    except (ValueError, SyntaxError):
+        return None, "GetConnectionUnixProcessID parse failed"
+    if not isinstance(pid, int):
+        return None, "GetConnectionUnixProcessID parse failed"
+    return pid, None
+
+
+def _read_process_details(pid: int | None) -> tuple[int | None, list[str] | None]:
+    if pid is None:
+        return None, None
+    proc_root = Path("/proc") / str(pid)
+
+    uid: int | None = None
+    status_path = proc_root / "status"
+    try:
+        for line in status_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("Uid:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    uid = int(parts[1])
+                break
+    except (OSError, ValueError):
+        uid = None
+
+    cmdline_path = proc_root / "cmdline"
+    cmdline: list[str] | None = None
+    try:
+        raw_cmdline = cmdline_path.read_bytes()
+        if raw_cmdline:
+            parts = [part.decode("utf-8", "replace") for part in raw_cmdline.split(b"\0") if part]
+            cmdline = parts or None
+    except OSError:
+        cmdline = None
+
+    return uid, cmdline
+
+
 def _capture_names(bus: str) -> dict[str, Any]:
+    captured_at = datetime.now().astimezone().isoformat()
+    snapshot: dict[str, Any] = {"captured_at": captured_at, "bus": bus, "names": [], "error": None}
+    deadline = time.monotonic() + _SNAPSHOT_BUDGET_SECONDS
+
+    def remaining_budget() -> float:
+        return max(0.0, deadline - time.monotonic())
+
+    def budget_exhausted() -> bool:
+        return remaining_budget() <= 0.0
+
     gdbus_path = shutil.which("gdbus")
     if gdbus_path is None:
-        return {"captured_at": datetime.now().astimezone().isoformat(), "names": [], "error": "gdbus not found"}
+        snapshot["error"] = "gdbus not found"
+        return snapshot
 
-    list_names = subprocess.run(
-        [
-            gdbus_path,
-            "call",
-            f"--{bus}",
-            "--dest",
-            "org.freedesktop.DBus",
-            "--object-path",
-            "/org/freedesktop/DBus",
-            "--method",
-            "org.freedesktop.DBus.ListNames",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    list_names = _run_gdbus_call(
+        gdbus_path,
+        bus,
+        "org.freedesktop.DBus.ListNames",
+        timeout_seconds=remaining_budget(),
     )
+    if list_names is None:
+        snapshot["error"] = "snapshot collection timed out"
+        return snapshot
     if list_names.returncode != 0:
-        return {
-            "captured_at": datetime.now().astimezone().isoformat(),
-            "names": [],
-            "error": list_names.stderr.strip() or "ListNames failed",
-        }
+        snapshot["error"] = list_names.stderr.strip() or "ListNames failed"
+        return snapshot
 
     try:
-        names = ast.literal_eval(list_names.stdout.strip())
+        names = _parse_gdbus_value(list_names.stdout.strip())
     except (ValueError, SyntaxError):
-        names = []
-    if isinstance(names, list) and names and isinstance(names[0], list):
+        snapshot["error"] = "ListNames parse failed"
+        return snapshot
+    if isinstance(names, tuple) and len(names) == 1 and isinstance(names[0], list):
         names = names[0]
+    if not isinstance(names, list):
+        snapshot["error"] = "ListNames parse failed"
+        return snapshot
 
-    items = [{"name": name} for name in names if isinstance(name, str)]
-    return {"captured_at": datetime.now().astimezone().isoformat(), "names": items}
+    entries: list[dict[str, Any]] = []
+    had_entry_failure = False
+    for name in names:
+        if budget_exhausted():
+            snapshot["error"] = "snapshot collection timed out"
+            break
+        if not isinstance(name, str):
+            continue
+        entry: dict[str, Any] = {
+            "name": name,
+            "owner": None,
+            "pid": None,
+            "uid": None,
+            "cmdline": None,
+            "error": None,
+        }
+
+        owner, error = _lookup_name_owner(
+            gdbus_path,
+            bus,
+            name,
+            timeout_seconds=remaining_budget(),
+        )
+        if error is not None:
+            entry["error"] = error
+            had_entry_failure = True
+            entries.append(entry)
+            continue
+        entry["owner"] = owner
+
+        pid, error = _lookup_name_pid(
+            gdbus_path,
+            bus,
+            owner,
+            timeout_seconds=remaining_budget(),
+        )
+        if error is not None:
+            entry["error"] = error
+            had_entry_failure = True
+            entries.append(entry)
+            continue
+        entry["pid"] = pid
+
+        uid, cmdline = _read_process_details(pid)
+        if budget_exhausted():
+            entry["uid"] = uid
+            entry["cmdline"] = cmdline
+            entries.append(entry)
+            snapshot["error"] = "snapshot collection timed out"
+            break
+        entry["uid"] = uid
+        entry["cmdline"] = cmdline
+        if uid is None or cmdline is None:
+            entry["error"] = "process details failed"
+            had_entry_failure = True
+
+        entries.append(entry)
+
+    snapshot["names"] = entries
+    if snapshot["error"] is None and had_entry_failure:
+        snapshot["error"] = "snapshot collection incomplete"
+    return snapshot
 
 
 def record_monitor(
