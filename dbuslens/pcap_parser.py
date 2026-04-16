@@ -67,6 +67,8 @@ def parse_pcap_stream(
                 serial=message.serial,
                 reply_serial=message.reply_serial or None,
                 error_name=message.error_name,
+                signature=message.signature or None,
+                body_preview=_preview_body(message.body),
             )
         )
         if progress_callback and hasattr(stream, "tell"):
@@ -79,3 +81,12 @@ def parse_pcap_stream(
         progress_callback(total_bytes, total_bytes)
 
     return ParseResult(events=events, skipped_packets=skipped_packets)
+
+
+def _preview_body(body: object, *, limit: int = 120) -> str | None:
+    if body in (None, []):
+        return None
+    preview = repr(body)
+    if len(preview) <= limit:
+        return preview
+    return f"{preview[: limit - 3]}..."

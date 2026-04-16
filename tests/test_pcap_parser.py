@@ -67,6 +67,8 @@ class ParsePcapBytesTests(unittest.TestCase):
                         path="/org/example/Demo",
                         interface="org.example.Demo",
                         member="Ping",
+                        signature="si",
+                        body=["hello", 3],
                         serial=17,
                     ),
                 ),
@@ -94,6 +96,8 @@ class ParsePcapBytesTests(unittest.TestCase):
         self.assertEqual(result.events[0].interface, "org.example.Demo")
         self.assertEqual(result.events[0].member, "Ping")
         self.assertEqual(result.events[0].operation, "org.example.Demo.Ping")
+        self.assertEqual(result.events[0].signature, "si")
+        self.assertEqual(result.events[0].body_preview, "['hello', 3]")
         self.assertEqual(result.events[0].timestamp, 1713081000.1)
         self.assertEqual(result.events[1].message_type, "signal")
 

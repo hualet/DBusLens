@@ -15,6 +15,8 @@ class Event:
     serial: int | None
     reply_serial: int | None
     error_name: str | None
+    signature: str | None = None
+    body_preview: str | None = None
 
     @property
     def operation(self) -> str:

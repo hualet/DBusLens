@@ -92,7 +92,7 @@ def _make_report() -> AnalysisReport:
                         timestamp=1.0,
                         destination="org.example.Service",
                         member="GetNameOwner",
-                        args_preview="not captured",
+                        args_preview="['org.example.Service']",
                     )
                 ],
             )
@@ -276,7 +276,7 @@ class ReportAppStateTests(unittest.TestCase):
                             timestamp=1.0,
                             destination="org.example.Service",
                             member="GetNameOwner",
-                            args_preview="not captured",
+                            args_preview="['svc-a']",
                         ),
                         ErrorDetail(
                             caller=":1.11",
@@ -300,7 +300,7 @@ class ReportAppStateTests(unittest.TestCase):
                             timestamp=2.0,
                             destination="org.example.Service",
                             member="GetNameOwner",
-                            args_preview="not captured",
+                            args_preview="['svc-b']",
                         ),
                     ],
                 )
@@ -328,8 +328,8 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(
             detail_rows(state),
             [
-                ("1.000s", ":1.10", "org.example.Service", "GetNameOwner", "not captured", "125.0 ms", "retried within 5s"),
-                ("2.000s", ":1.11", "org.example.Service", "GetNameOwner", "not captured", "375.0 ms", "-"),
+                ("1.000s", ":1.10", "org.example.Service", "GetNameOwner", "['svc-a']", "125.0 ms", "retried within 5s"),
+                ("2.000s", ":1.11", "org.example.Service", "GetNameOwner", "['svc-b']", "375.0 ms", "-"),
             ],
         )
 

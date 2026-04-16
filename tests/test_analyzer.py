@@ -243,6 +243,8 @@ class BuildReportTests(unittest.TestCase):
                 serial=7,
                 reply_serial=None,
                 error_name=None,
+                signature="si",
+                body_preview="['hello', 3]",
             ),
             Event(
                 timestamp=1.2,
@@ -267,6 +269,8 @@ class BuildReportTests(unittest.TestCase):
                 serial=9,
                 reply_serial=None,
                 error_name=None,
+                signature="si",
+                body_preview="['bye', 4]",
             ),
             Event(
                 timestamp=2.4,
@@ -323,8 +327,8 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(
             [(detail.member, detail.destination, detail.args_preview) for detail in summary.details],
             [
-                ("Ping", "org.example.Service", "not captured"),
-                ("Ping", "org.example.Service", "not captured"),
+                ("Ping", "org.example.Service", "['hello', 3]"),
+                ("Ping", "org.example.Service", "['bye', 4]"),
             ],
         )
         self.assertEqual(summary.details[0].latency_ms, "200.0 ms")

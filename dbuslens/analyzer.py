@@ -322,7 +322,7 @@ def _build_error_summaries(
             "destination": target_source,
             "member": _member_name_for(original, operation),
             "path": original.path if original and original.path else "-",
-            "args_preview": "not captured",
+            "args_preview": _args_preview_for(original),
         }
         bucket["details"].append(detail)
         if event.timestamp is not None:
@@ -506,3 +506,9 @@ def _append_note(existing: str, note: str) -> str:
     if note in existing:
         return existing
     return f"{existing}; {note}"
+
+
+def _args_preview_for(original: Event | None) -> str:
+    if original is None:
+        return "unavailable"
+    return original.body_preview or "[]"
