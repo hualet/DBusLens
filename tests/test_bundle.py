@@ -59,43 +59,103 @@ class BundleRoundTripTests(unittest.TestCase):
             "path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged "
             "string 'org.example.Service' string '' string ':1.42'\n"
         ).encode("utf-8")
-        monitor_calls = {"count": 0}
-        snapshot_calls = {"count": 0}
+        call_order: list[str] = []
+
+        def fake_start_background_monitor(command: list[str]) -> object:
+            del command
+            call_order.append("start_timeline")
+            return object()
+
+        def fake_stop_background_monitor(process: object) -> tuple[bytes, bytes, int]:
+            del process
+            call_order.append("stop_timeline")
+            return timeline_stdout, b"", 0
 
         def fake_run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
-            del command, duration
-            if monitor_calls["count"] == 0:
-                monitor_calls["count"] += 1
+            del duration
+            if command[-1] == "--pcap":
+                call_order.append("pcap")
                 return pcap_stdout, b"", 0
-            if monitor_calls["count"] == 1:
-                monitor_calls["count"] += 1
+            if command[-1] == "--profile":
+                call_order.append("profile")
                 return profile_stdout, b"", 0
-            monitor_calls["count"] += 1
-            return timeline_stdout, b"timeline-warning", 0
+            self.fail(f"unexpected monitor command: {command}")
 
         def fake_capture_names(bus: str) -> dict[str, object]:
-            snapshot_calls["count"] += 1
+            call_order.append("snapshot")
             captured_at = (
                 "2026-04-16T10:20:30+08:00"
-                if snapshot_calls["count"] == 1
+                if call_order.count("snapshot") == 1
                 else "2026-04-16T10:20:40+08:00"
             )
             return {"captured_at": captured_at, "bus": bus, "names": []}
 
         with tempfile.TemporaryDirectory() as tmpdir, patch(
             "dbuslens.record.shutil.which", return_value="/usr/bin/dbus-monitor"
+        ), patch("dbuslens.record._start_background_monitor", side_effect=fake_start_background_monitor), patch(
+            "dbuslens.record._stop_background_monitor", side_effect=fake_stop_background_monitor
         ), patch("dbuslens.record._run_monitor", side_effect=fake_run_monitor), patch(
             "dbuslens.record._capture_names", side_effect=fake_capture_names
         ), patch("dbuslens.record.write_bundle") as write_bundle_mock:
             output_path = Path(tmpdir) / "capture.dblens"
             record_monitor(bus="session", duration=10, output_path=output_path)
 
+        self.assertLess(call_order.index("start_timeline"), call_order.index("pcap"))
+        self.assertLess(call_order.index("pcap"), call_order.index("profile"))
+        self.assertLess(call_order.index("profile"), call_order.index("stop_timeline"))
         self.assertEqual(write_bundle_mock.call_count, 1)
         contents = write_bundle_mock.call_args.args[1]
         self.assertIsInstance(contents, BundleContents)
         self.assertEqual(contents.metadata.capture_files["names_timeline"], "names_timeline.json")
         self.assertIsNotNone(contents.names_timeline)
         self.assertEqual(contents.names_timeline["events"][0]["new_owner"], ":1.42")
+
+    def test_record_monitor_records_explicit_timeline_error_when_background_monitor_exits_nonzero_with_empty_stderr(self) -> None:
+        pcap_stdout = b"pcap-bytes"
+        profile_stdout = b"profile-bytes"
+
+        def fake_start_background_monitor(command: list[str]) -> object:
+            del command
+            return object()
+
+        def fake_stop_background_monitor(process: object) -> tuple[bytes, bytes, int]:
+            del process
+            return b"", b"", 1
+
+        def fake_run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
+            del duration
+            if command[-1] == "--pcap":
+                return pcap_stdout, b"", 0
+            if command[-1] == "--profile":
+                return profile_stdout, b"", 0
+            self.fail(f"unexpected monitor command: {command}")
+
+        snapshot_values = iter(
+            [
+                {"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},
+                {"captured_at": "2026-04-16T10:20:40+08:00", "bus": "session", "names": []},
+            ]
+        )
+
+        def fake_capture_names(bus: str) -> dict[str, object]:
+            snapshot = next(snapshot_values)
+            self.assertEqual(snapshot["bus"], bus)
+            return snapshot
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch(
+            "dbuslens.record.shutil.which", return_value="/usr/bin/dbus-monitor"
+        ), patch("dbuslens.record._start_background_monitor", side_effect=fake_start_background_monitor), patch(
+            "dbuslens.record._stop_background_monitor", side_effect=fake_stop_background_monitor
+        ), patch("dbuslens.record._run_monitor", side_effect=fake_run_monitor), patch(
+            "dbuslens.record._capture_names", side_effect=fake_capture_names
+        ), patch("dbuslens.record.write_bundle") as write_bundle_mock:
+            output_path = Path(tmpdir) / "capture.dblens"
+            record_monitor(bus="session", duration=10, output_path=output_path)
+
+        contents = write_bundle_mock.call_args.args[1]
+        self.assertIsNotNone(contents.names_timeline)
+        self.assertIsNotNone(contents.names_timeline["error"])
+        self.assertIn("timeline monitor exited with code 1", contents.names_timeline["error"])
 
     def test_write_and_read_bundle_round_trip(self) -> None:
         metadata = BundleMetadata(
