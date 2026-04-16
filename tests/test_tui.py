@@ -1,6 +1,7 @@
 import unittest
 
 from textual.css.query import NoMatches
+from textual.containers import Vertical
 from textual.widgets import DataTable, Footer, Header, ListView, ProgressBar, Static
 
 from dbuslens.models import (
@@ -35,8 +36,8 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("#view-nav > ListItem.-highlight", css)
         self.assertIn("#column-resizer", css)
         self.assertIn("content-align: center middle", css)
-        self.assertIn("width: 1", css)
-        self.assertIn("pointer: ew-resize", css)
+        self.assertIn("height: 1", css)
+        self.assertIn("pointer: ns-resize", css)
         self.assertIn("#column-resizer:hover", css)
         self.assertIn("pointer: grabbing", css)
 
@@ -85,15 +86,12 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         app = DBusLensReportApp(report)
 
         async with app.run_test() as pilot:
-            detail = app.query_one("#detail-pane", Static)
             detail_table = app.query_one("#detail-table", DataTable)
 
             await pilot.press("down")
             await pilot.pause()
 
             self.assertEqual(app.state.selected_index, 1)
-            self.assertIn("demo-service [1111]", str(detail.render()))
-            self.assertIn("PID: 1111", str(detail.render()))
             self.assertEqual(detail_table.row_count, 1)
 
     async def test_textual_ui_shows_report_metadata_and_all_detail_rows(self) -> None:
@@ -164,8 +162,8 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(app.query_one("#app-bar"), Static)
             self.assertIsInstance(app.query_one("#report-meta"), Static)
             self.assertIsInstance(app.query_one("#view-nav"), ListView)
+            self.assertIsInstance(app.query_one("#content-area"), Vertical)
             self.assertIsInstance(app.query_one("#main-table"), DataTable)
-            self.assertIsInstance(app.query_one("#detail-pane"), Static)
             self.assertIsInstance(app.query_one("#detail-table"), DataTable)
             self.assertIsInstance(app.query_one(Footer), Footer)
 
@@ -202,7 +200,6 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test():
             self.assertEqual(app.query_one("#view-nav", ListView).border_title, " views ")
             self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
-            self.assertEqual(app.query_one("#detail-pane", Static).border_title, " selected ")
             self.assertEqual(app.query_one("#detail-table", DataTable).border_title, " members ")
 
     async def test_textual_ui_supports_errors_view(self) -> None:
@@ -260,7 +257,6 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         app = DBusLensReportApp(report)
 
         async with app.run_test() as pilot:
-            detail = app.query_one("#detail-pane", Static)
             await pilot.press("e")
             await pilot.pause()
 
@@ -272,10 +268,6 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(detail_table.border_title, " details ")
             self.assertEqual(main_table.row_count, 1)
             self.assertEqual(detail_table.row_count, 1)
-            self.assertIn(
-                "Target owner at capture time: :1.42 [4242]",
-                str(detail.render()),
-            )
 
     async def test_textual_ui_supports_sender_and_member_shortcuts(self) -> None:
         report = AnalysisReport(
@@ -344,17 +336,33 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             splitter = app.query_one("#column-resizer", Static)
-            detail_column = app.query_one("#detail-column")
-            before_width = detail_column.size.width
+            main_table = app.query_one("#main-table", DataTable)
+            before_height = main_table.size.height
 
-            target_x = splitter.region.x - 10
-            target_y = splitter.region.y
+            target_x = splitter.region.x
+            target_y = splitter.region.y + 5
 
             await pilot.mouse_down("#column-resizer", offset=(0, 0))
             await pilot.mouse_up(offset=(target_x, target_y))
             await pilot.pause()
 
-            self.assertGreater(detail_column.size.width, before_width)
+            self.assertGreater(main_table.size.height, before_height)
+
+    async def test_textual_ui_uses_narrower_view_navigation(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=1,
+            actionable_events=1,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+            error_rows=[],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test():
+            nav = app.query_one("#view-nav", ListView)
+            self.assertEqual(int(nav.styles.width.value), 15)
 
     async def test_textual_ui_shows_visible_drag_handle(self) -> None:
         report = AnalysisReport(
@@ -371,7 +379,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test():
             resizer = app.query_one("#column-resizer", Static)
 
-            self.assertEqual(str(resizer.render()), "⋮")
+            self.assertEqual(str(resizer.render()), "━")
 
 
 if __name__ == "__main__":

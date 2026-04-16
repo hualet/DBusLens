@@ -31,14 +31,14 @@ class ColumnResizer(Static):
         on_drag_move: Callable[[int], None],
         on_drag_end: Callable[[], None],
     ) -> None:
-        super().__init__("⋮", id="column-resizer")
+        super().__init__("━", id="column-resizer")
         self._on_drag_start = on_drag_start
         self._on_drag_move = on_drag_move
         self._on_drag_end = on_drag_end
-        self.styles.pointer = "ew-resize"
+        self.styles.pointer = "ns-resize"
 
     def on_enter(self, event: events.Enter) -> None:
-        self.styles.pointer = "ew-resize"
+        self.styles.pointer = "ns-resize"
         self.screen.update_pointer_shape()
         event.stop()
 
@@ -53,26 +53,26 @@ class ColumnResizer(Static):
         self.add_class("dragging")
         self.styles.pointer = "grabbing"
         self.screen.update_pointer_shape()
-        self._on_drag_start(event.screen_x)
+        self._on_drag_start(event.screen_y)
         event.stop()
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
-        self._on_drag_move(event.screen_x)
+        self._on_drag_move(event.screen_y)
 
     def on_mouse_up(self, event: events.MouseUp) -> None:
         self.remove_class("dragging")
         self.release_mouse()
-        self.styles.pointer = "ew-resize"
+        self.styles.pointer = "ns-resize"
         self.screen.update_pointer_shape()
         self._on_drag_end()
         event.stop()
 
 
 class DBusLensReportApp(App[None]):
-    VIEW_NAV_WIDTH = 24
-    RESIZER_WIDTH = 1
-    MIN_MAIN_WIDTH = 24
-    MIN_DETAIL_WIDTH = 36
+    VIEW_NAV_WIDTH = 15
+    RESIZER_HEIGHT = 1
+    MIN_MAIN_HEIGHT = 8
+    MIN_DETAIL_HEIGHT = 8
 
     BINDINGS = [
         ("s", "show_outbound", "Senders"),
@@ -120,34 +120,33 @@ class DBusLensReportApp(App[None]):
     }
 
     #view-nav {
-        width: 24;
+        width: 15;
         padding: 1 0;
         border: round #a78bfa;
         background: #0b1017;
         color: #dcefd9;
     }
 
+    #content-area {
+        width: 1fr;
+        height: 1fr;
+    }
+
     #main-table {
         height: 1fr;
-        width: 3fr;
         border: round #6ee7b7;
         background: #0b1017;
         color: #e6f6ea;
     }
 
-    #detail-column {
-        width: 2fr;
-        min-width: 36;
-    }
-
     #column-resizer {
-        width: 1;
-        min-width: 1;
+        height: 1;
+        min-height: 1;
         content-align: center middle;
         background: #111827;
         color: #fcd34d;
         text-style: bold;
-        pointer: ew-resize;
+        pointer: ns-resize;
     }
 
     #column-resizer:hover,
@@ -158,14 +157,6 @@ class DBusLensReportApp(App[None]):
 
     #column-resizer.dragging {
         pointer: grabbing;
-    }
-
-    #detail-pane {
-        height: 9;
-        padding: 1 2;
-        border: round #f472b6;
-        background: #0b1017;
-        color: #e8eef8;
     }
 
     #detail-table {
@@ -242,8 +233,7 @@ class DBusLensReportApp(App[None]):
         color: #fcd34d;
     }
 
-    #view-nav .label,
-    #detail-pane .label {
+    #view-nav .label {
         color: #fcd34d;
     }
     """
@@ -252,8 +242,8 @@ class DBusLensReportApp(App[None]):
         super().__init__()
         self.report = report
         self.state = ReportAppState(report)
-        self._detail_width: int | None = None
-        self._dragging_detail_width = False
+        self._main_height: int | None = None
+        self._dragging_main_height = False
 
     def compose(self) -> ComposeResult:
         yield Static(id="app-bar")
@@ -265,14 +255,13 @@ class DBusLensReportApp(App[None]):
                 ListItem(Label("Errors")),
                 id="view-nav",
             )
-            yield DataTable(id="main-table")
-            yield ColumnResizer(
-                on_drag_start=self._begin_detail_resize,
-                on_drag_move=self._drag_detail_resize,
-                on_drag_end=self._end_detail_resize,
-            )
-            with Vertical(id="detail-column"):
-                yield Static(id="detail-pane")
+            with Vertical(id="content-area"):
+                yield DataTable(id="main-table")
+                yield ColumnResizer(
+                    on_drag_start=self._begin_main_resize,
+                    on_drag_move=self._drag_main_resize,
+                    on_drag_end=self._end_main_resize,
+                )
                 yield DataTable(id="detail-table")
         yield Footer()
 
@@ -300,7 +289,6 @@ class DBusLensReportApp(App[None]):
 
     def _populate_panel_titles(self) -> None:
         self.query_one("#view-nav", ListView).border_title = " views "
-        self.query_one("#detail-pane", Static).border_title = " selected "
 
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
@@ -328,7 +316,6 @@ class DBusLensReportApp(App[None]):
             )
 
     def refresh_detail(self) -> None:
-        self.query_one("#detail-pane", Static).update("\n".join(detail_lines(self.state)))
         table = self.query_one("#detail-table", DataTable)
         table.border_title = {
             "outbound": " members ",
@@ -408,48 +395,45 @@ class DBusLensReportApp(App[None]):
         self._populate_main_table()
         self.refresh_detail()
 
-    def _begin_detail_resize(self, screen_x: int) -> None:
-        self._dragging_detail_width = True
-        self._drag_detail_resize(screen_x)
+    def _begin_main_resize(self, screen_y: int) -> None:
+        self._dragging_main_height = True
+        self._drag_main_resize(screen_y)
 
-    def _drag_detail_resize(self, screen_x: int) -> None:
-        if not self._dragging_detail_width:
+    def _drag_main_resize(self, screen_y: int) -> None:
+        if not self._dragging_main_height:
             return
-        detail_width = self._detail_width_for_screen_x(screen_x)
-        if detail_width == self._detail_width:
+        main_height = self._main_height_for_screen_y(screen_y)
+        if main_height == self._main_height:
             return
-        self._detail_width = detail_width
-        self._apply_detail_width()
+        self._main_height = main_height
+        self._apply_main_height()
 
-    def _end_detail_resize(self) -> None:
-        self._dragging_detail_width = False
+    def _end_main_resize(self) -> None:
+        self._dragging_main_height = False
 
     def on_resize(self) -> None:
-        if self._detail_width is None:
+        if self._main_height is None:
             return
-        detail_width = self._clamp_detail_width(self._detail_width)
-        if detail_width == self._detail_width:
+        main_height = self._clamp_main_height(self._main_height)
+        if main_height == self._main_height:
             return
-        self._detail_width = detail_width
-        self._apply_detail_width()
+        self._main_height = main_height
+        self._apply_main_height()
 
-    def _detail_width_for_screen_x(self, screen_x: int) -> int:
-        body = self.query_one("#body", Horizontal)
-        detail_start = screen_x + self.RESIZER_WIDTH
-        body_right = body.content_region.x + body.content_region.width
-        return self._clamp_detail_width(body_right - detail_start)
+    def _main_height_for_screen_y(self, screen_y: int) -> int:
+        content = self.query_one("#content-area", Vertical)
+        content_top = content.content_region.y
+        return self._clamp_main_height(screen_y - content_top)
 
-    def _clamp_detail_width(self, requested_width: int) -> int:
-        body = self.query_one("#body", Horizontal)
-        available_width = (
-            body.content_region.width - self.VIEW_NAV_WIDTH - self.RESIZER_WIDTH
-        )
-        max_detail_width = max(1, available_width - self.MIN_MAIN_WIDTH)
-        min_detail_width = min(self.MIN_DETAIL_WIDTH, max_detail_width)
-        return max(min_detail_width, min(requested_width, max_detail_width))
+    def _clamp_main_height(self, requested_height: int) -> int:
+        content = self.query_one("#content-area", Vertical)
+        available_height = content.content_region.height - self.RESIZER_HEIGHT
+        max_main_height = max(1, available_height - self.MIN_DETAIL_HEIGHT)
+        min_main_height = min(self.MIN_MAIN_HEIGHT, max_main_height)
+        return max(min_main_height, min(requested_height, max_main_height))
 
-    def _apply_detail_width(self) -> None:
-        self.query_one("#detail-column", Vertical).styles.width = self._detail_width
+    def _apply_main_height(self) -> None:
+        self.query_one("#main-table", DataTable).styles.height = self._main_height
         self.refresh(layout=True)
 
     def _focus_navigation(self) -> None:

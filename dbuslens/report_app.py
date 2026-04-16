@@ -161,12 +161,12 @@ def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
     if state.active_view == "errors":
         return (
             _width_for_column(("Time",), rows, 0, minimum=10, maximum=14),
-            _width_for_column(("Sender",), rows, 1, minimum=14, maximum=32),
-            _width_for_column(("Destination",), rows, 2, minimum=18, maximum=36),
-            _width_for_column(("Member",), rows, 3, minimum=12, maximum=28),
-            _width_for_column(("Args",), rows, 4, minimum=12, maximum=32),
+            _width_for_column(("Sender",), rows, 1, minimum=12, maximum=20),
+            _width_for_column(("Destination",), rows, 2, minimum=14, maximum=24),
+            _width_for_column(("Member",), rows, 3, minimum=10, maximum=16),
+            _width_for_column(("Args",), rows, 4, minimum=24, maximum=96),
             _width_for_column(("Latency",), rows, 5, minimum=10, maximum=16),
-            _width_for_column(("Notes",), rows, 6, minimum=12, maximum=36),
+            _width_for_column(("Notes",), rows, 6, minimum=10, maximum=16),
         )
     return (
         8,
