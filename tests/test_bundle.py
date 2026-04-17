@@ -12,11 +12,53 @@ from dbuslens.record import (
     _build_names_timeline,
     _capture_names,
     _parse_name_owner_changed_line,
+    _start_background_monitor,
+    _stop_background_monitor,
     record_monitor,
 )
 
 
 class BundleRoundTripTests(unittest.TestCase):
+    def test_background_monitor_uses_file_backed_output_to_avoid_pipe_blocking(self) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.returncode = 0
+
+            def terminate(self) -> None:
+                return None
+
+            def communicate(self, timeout: int | None = None) -> tuple[bytes, bytes]:
+                del timeout
+                return b"", b""
+
+            def kill(self) -> None:
+                return None
+
+        def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+            del command
+            captured_kwargs.update(kwargs)
+            stdout = kwargs["stdout"]
+            stderr = kwargs["stderr"]
+            self.assertTrue(hasattr(stdout, "write"))
+            self.assertTrue(hasattr(stderr, "write"))
+            self.assertNotEqual(stdout, subprocess.PIPE)
+            self.assertNotEqual(stderr, subprocess.PIPE)
+            stdout.write(b"timeline-stdout\n")
+            stderr.write(b"timeline-stderr\n")
+            stdout.flush()
+            stderr.flush()
+            return FakeProcess()
+
+        with patch("dbuslens.record.subprocess.Popen", side_effect=fake_popen):
+            monitor = _start_background_monitor(["dbus-monitor", "--session"])
+            stdout, stderr, exit_code = _stop_background_monitor(monitor)
+
+        self.assertEqual(stdout, b"timeline-stdout\n")
+        self.assertEqual(stderr, b"timeline-stderr\n")
+        self.assertEqual(exit_code, 0)
+
     def test_parse_name_owner_changed_line_extracts_fields(self) -> None:
         line = (
             "signal time=1713243600.500 sender=org.freedesktop.DBus -> destination=(null destination) "
@@ -103,9 +145,12 @@ class BundleRoundTripTests(unittest.TestCase):
 
         self.assertIn("sender='org.freedesktop.DBus'", " ".join(start_command))
         self.assertIn("member='NameOwnerChanged'", " ".join(start_command))
+        self.assertLess(call_order.index("snapshot"), call_order.index("start_timeline"))
         self.assertLess(call_order.index("start_timeline"), call_order.index("pcap"))
         self.assertLess(call_order.index("pcap"), call_order.index("profile"))
         self.assertLess(call_order.index("profile"), call_order.index("stop_timeline"))
+        self.assertLess(call_order.index("stop_timeline"), len(call_order) - 1)
+        self.assertEqual(call_order[-1], "snapshot")
         self.assertEqual(write_bundle_mock.call_count, 1)
         contents = write_bundle_mock.call_args.args[1]
         self.assertIsInstance(contents, BundleContents)

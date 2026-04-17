@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -26,6 +27,16 @@ class RecordResult:
 
 class RecordError(RuntimeError):
     pass
+
+
+@dataclass
+class _BackgroundMonitor:
+    process: subprocess.Popen[bytes]
+    stdout_file: Any
+    stderr_file: Any
+    temp_dir: tempfile.TemporaryDirectory[str]
+    stdout_path: Path
+    stderr_path: Path
 
 
 def build_default_output_path(
@@ -59,21 +70,46 @@ def _run_monitor(command: list[str], duration: int) -> tuple[bytes, bytes, int]:
     return stdout, stderr, exit_code
 
 
-def _start_background_monitor(command: list[str]) -> subprocess.Popen[bytes]:
-    return subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+def _start_background_monitor(command: list[str]) -> _BackgroundMonitor:
+    temp_dir = tempfile.TemporaryDirectory(prefix="dbuslens-timeline-")
+    stdout_path = Path(temp_dir.name) / "stdout.log"
+    stderr_path = Path(temp_dir.name) / "stderr.log"
+    stdout_file = stdout_path.open("w+b")
+    stderr_file = stderr_path.open("w+b")
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+    except OSError:
+        stdout_file.close()
+        stderr_file.close()
+        temp_dir.cleanup()
+        raise
+    return _BackgroundMonitor(
+        process=process,
+        stdout_file=stdout_file,
+        stderr_file=stderr_file,
+        temp_dir=temp_dir,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
     )
 
 
-def _stop_background_monitor(process: subprocess.Popen[bytes]) -> tuple[bytes, bytes, int]:
+def _stop_background_monitor(monitor: _BackgroundMonitor) -> tuple[bytes, bytes, int]:
+    process = monitor.process
     process.terminate()
     try:
-        stdout, stderr = process.communicate(timeout=3)
+        process.communicate(timeout=3)
     except subprocess.TimeoutExpired:
         process.kill()
-        stdout, stderr = process.communicate()
+        process.communicate()
+    monitor.stdout_file.close()
+    monitor.stderr_file.close()
+    stdout = monitor.stdout_path.read_bytes()
+    stderr = monitor.stderr_path.read_bytes()
+    monitor.temp_dir.cleanup()
     exit_code = process.returncode or 0
     return stdout, stderr, exit_code
 
@@ -454,24 +490,25 @@ def record_monitor(
     pcap_command = [monitor_path, f"--{bus}", "--pcap"]
     profile_command = [monitor_path, f"--{bus}", "--profile"]
     timeline_command = _build_timeline_command(monitor_path, bus)
-    timeline_process: subprocess.Popen[bytes] | None = None
+    timeline_process: _BackgroundMonitor | None = None
     timeline_start_error: str | None = None
     timeline_stdout = b""
     timeline_stderr = b""
     timeline_exit_code = 0
+    initial_snapshot = _capture_names(bus)
+    started_at_iso = datetime.now().astimezone().isoformat()
     try:
         timeline_process = _start_background_monitor(timeline_command)
     except OSError as exc:
         timeline_start_error = f"timeline monitor failed to start: {exc}"
     try:
-        started_at_iso = datetime.now().astimezone().isoformat()
-        initial_snapshot = _capture_names(bus)
         stdout, stderr, exit_code = _run_monitor(pcap_command, duration)
         profile_stdout, profile_stderr, profile_exit_code = _run_monitor(profile_command, duration)
-        final_snapshot = _capture_names(bus)
     finally:
         if timeline_process is not None:
             timeline_stdout, timeline_stderr, timeline_exit_code = _stop_background_monitor(timeline_process)
+    ended_at_iso = datetime.now().astimezone().isoformat()
+    final_snapshot = _capture_names(bus)
 
     if exit_code not in {0, -15} and not stdout:
         stderr_text = stderr.decode("utf-8", "replace").strip()
@@ -483,8 +520,6 @@ def record_monitor(
     stderr_text = combined_stderr.decode("utf-8", "replace")
     if "BecomeMonitor" in stderr_text:
         monitor_mode = "eavesdrop"
-
-    ended_at_iso = datetime.now().astimezone().isoformat()
     timeline_error = timeline_start_error or _build_timeline_error(
         timeline_stderr,
         timeline_exit_code,

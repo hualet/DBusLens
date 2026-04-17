@@ -53,6 +53,88 @@ class NameTimelineResolverTests(unittest.TestCase):
         self.assertEqual(resolved.display_name, "org.example.Service")
         self.assertEqual(resolved.pid, 4242)
 
+    def test_resolve_unique_name_prefers_well_known_alias_then_lexical_order(self) -> None:
+        resolver = NameTimelineResolver.from_payload(
+            {
+                "captured_at": "2026-04-16T10:20:30+08:00",
+                "bus": "session",
+                "names": [
+                    {
+                        "name": "org.example.Alpha",
+                        "owner": ":1.42",
+                        "pid": 4242,
+                        "uid": 1000,
+                        "cmdline": ["/bin/service"],
+                        "error": None,
+                    },
+                    {
+                        "name": ":1.42",
+                        "owner": ":1.42",
+                        "pid": 4242,
+                        "uid": 1000,
+                        "cmdline": ["/bin/service"],
+                        "error": None,
+                    },
+                    {
+                        "name": "org.example.Zebra",
+                        "owner": ":1.42",
+                        "pid": 4242,
+                        "uid": 1000,
+                        "cmdline": ["/bin/service"],
+                        "error": None,
+                    },
+                ],
+            },
+            {
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Alpha",
+                            "owner": ":1.42",
+                            "pid": 4242,
+                            "uid": 1000,
+                            "cmdline": ["/bin/service"],
+                            "error": None,
+                        },
+                        {
+                            "name": ":1.42",
+                            "owner": ":1.42",
+                            "pid": 4242,
+                            "uid": 1000,
+                            "cmdline": ["/bin/service"],
+                            "error": None,
+                        },
+                        {
+                            "name": "org.example.Zebra",
+                            "owner": ":1.42",
+                            "pid": 4242,
+                            "uid": 1000,
+                            "cmdline": ["/bin/service"],
+                            "error": None,
+                        },
+                    ],
+                },
+                "events": [],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [],
+                },
+                "error": None,
+            },
+        )
+
+        resolved = resolver.resolve_name(":1.42", timestamp=1713243600.5)
+
+        self.assertEqual(resolved.display_name, "org.example.Alpha")
+        self.assertEqual(resolved.owner, ":1.42")
+        self.assertEqual(resolved.pid, 4242)
+
     def test_resolve_name_uses_timeline_for_short_lived_client(self) -> None:
         resolver = NameTimelineResolver.from_payload(
             {"captured_at": "2026-04-16T10:20:30+08:00", "bus": "session", "names": []},

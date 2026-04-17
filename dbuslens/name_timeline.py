@@ -94,7 +94,7 @@ class NameTimelineResolver:
 
         metadata = self._resolve_metadata(active_info)
         if raw_name.startswith(":"):
-            display_name = active_info.name
+            display_name = self._resolve_owner_alias(active_info.owner) or active_info.name
             owner = active_info.owner
         else:
             display_name = raw_name
@@ -108,6 +108,27 @@ class NameTimelineResolver:
             uid=metadata.uid if metadata else None,
             cmdline=metadata.cmdline if metadata else None,
         )
+
+    def _resolve_owner_alias(self, owner: str | None) -> str | None:
+        if not owner:
+            return None
+
+        candidates: dict[str, CaptureNameInfo] = {}
+        for index in (
+            self._initial_snapshot,
+            self._final_snapshot,
+            self._snapshot_names,
+        ):
+            for info in index.values():
+                if info.owner != owner:
+                    continue
+                existing = candidates.get(info.name)
+                if existing is None or _snapshot_alias_key(info) < _snapshot_alias_key(existing):
+                    candidates[info.name] = info
+
+        if not candidates:
+            return None
+        return min(candidates.values(), key=_snapshot_alias_key).name
 
     def _resolve_active_info(
         self,
@@ -284,3 +305,7 @@ def _capture_name_info(entry: dict[str, object]) -> CaptureNameInfo | None:
         uid=uid,
         cmdline=cmdline,
     )
+
+
+def _snapshot_alias_key(info: CaptureNameInfo) -> tuple[bool, str]:
+    return (info.name.startswith(":"), info.name)
