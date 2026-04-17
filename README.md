@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/attachments/logo_full_size.png" alt="DBusLens logo" width="256" height="256">
+  <img src="https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/logo_full_size.png" alt="DBusLens logo" width="256" height="256">
 </p>
 
 # DBusLens
@@ -30,38 +30,65 @@ DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It store
 
 ### Senders
 
-![](./docs/attachments/senders.svg)
+![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/senders.svg)
 
 ### Members
 
-![](./docs/attachments/members.svg)
+![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/members.svg)
 
 ### Errors
 
-![](./docs/attachments/errors.svg)
+![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/errors.svg)
 
-## Quick Start
+## For Users
 
-Install the published tool:
+### Requirements
 
-```bash
-uv tool install dbuslens
-```
-
-This installs the `dbuslens` command into your user tool path. `uv` documents that `uv tool install`
-exposes package executables on `PATH`, which matches the intended install flow.
-
-Runtime requirements:
+DBusLens currently targets Linux systems with D-Bus tooling available on `PATH`.
 
 - Linux
 - `dbus-monitor`
 - `gdbus`
 
-If you are working on the project locally instead of installing from PyPI:
+### Install
+
+Recommended:
 
 ```bash
-uv sync
+uv tool install dbuslens
 ```
+
+Alternative:
+
+```bash
+pip install dbuslens
+```
+
+After installation, confirm the command is available:
+
+```bash
+dbuslens --help
+```
+
+### Enable Shell Completion
+
+Bash:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+dbuslens completion bash > ~/.local/share/bash-completion/completions/dbuslens
+```
+
+Zsh:
+
+```bash
+mkdir -p ~/.local/share/zsh/site-functions
+dbuslens completion zsh > ~/.local/share/zsh/site-functions/_dbuslens
+```
+
+Open a new shell after writing the completion file, or reload your shell configuration.
+
+### Basic Usage
 
 Record a capture:
 
@@ -77,33 +104,6 @@ dbuslens report
 dbuslens report --input /tmp/system.dblens
 ```
 
-Enable shell completion:
-
-```bash
-mkdir -p ~/.local/share/bash-completion/completions
-dbuslens completion bash > ~/.local/share/bash-completion/completions/dbuslens
-```
-
-```bash
-mkdir -p ~/.local/share/zsh/site-functions
-dbuslens completion zsh > ~/.local/share/zsh/site-functions/_dbuslens
-```
-
-Format reference:
-
-- [`docs/dblens-format.md`](./docs/dblens-format.md)
-
-Recent `.dblens` captures also embed ownership timeline metadata, which helps `report` resolve
-short-lived D-Bus unique names back to service labels, recover error call context across owner
-changes, and attach more accurate process metadata in the `Errors` view.
-
-## Operation Guide
-
-`dbuslens` has two main commands:
-
-- `record`: start a timed D-Bus capture and save it as a `.dblens` bundle
-- `report`: open a saved `.dblens` bundle in the Textual report UI
-
 Default behavior:
 
 - `record` uses the `session` bus by default
@@ -116,6 +116,49 @@ Typical workflow:
 3. Switch between `Senders`, `Members`, and `Errors`.
 4. Move through the table and inspect the detail pane for the selected row or error summary.
 5. In `Errors`, use the details table to inspect resolved caller and target names, per-call arguments, and retry context.
+
+Format reference:
+
+- [`docs/dblens-format.md`](./docs/dblens-format.md)
+
+Recent `.dblens` captures also embed ownership timeline metadata, which helps `report` resolve
+short-lived D-Bus unique names back to service labels, recover error call context across owner
+changes, and attach more accurate process metadata in the `Errors` view.
+
+## For Developers
+
+Clone the repository and create the local environment:
+
+```bash
+git clone https://github.com/hualet/DBusLens.git
+cd DBusLens
+uv sync
+```
+
+Run the test suite:
+
+```bash
+./.venv/bin/python -m unittest discover -s tests -v
+```
+
+Run lint:
+
+```bash
+uv tool run --from pylint --with dbus-fast --with dpkt --with textual pylint $(git ls-files '*.py')
+```
+
+Verify the CLI wiring:
+
+```bash
+./.venv/bin/python -m dbuslens --help
+```
+
+Run the app from the checkout:
+
+```bash
+uv run dbuslens record --duration 10
+uv run dbuslens report
+```
 
 ## Keyboard Shortcuts
 
