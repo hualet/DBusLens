@@ -49,7 +49,7 @@ def build_report(
     for index, event in enumerate(events, start=1):
         if event.message_type == "error":
             error_name = event.error_name or "<unknown>"
-            original = _find_original_call(event, call_index, snapshot_index)
+            original = _find_original_call(event, call_index, snapshot_index, resolver)
             target_name, _, operation_name = _build_error_identity(event, original)
             error_totals[error_name] += 1
             error_children[error_name][(target_name, operation_name)] += 1
@@ -280,7 +280,7 @@ def _build_error_summaries(
         if event.message_type != "error":
             continue
 
-        original = _find_original_call(event, call_index, snapshot_index)
+        original = _find_original_call(event, call_index, snapshot_index, resolver)
 
         target_source, caller_source, operation = _build_error_identity(event, original)
         target_resolved = resolver.resolve_name(target_source, timestamp=event.timestamp)
@@ -325,6 +325,7 @@ def _build_error_summaries(
         detail = {
             "caller": caller_resolved.display_name,
             "caller_process": _capture_name_info_from_resolved(caller_resolved),
+            "caller_identity": _caller_identity_key(caller_source, caller_resolved),
             "target_process": _capture_name_info_from_resolved(target_resolved),
             "latency_ms": _format_latency_ms(latency_ms),
             "notes": _join_notes(
@@ -344,7 +345,7 @@ def _build_error_summaries(
         }
         bucket["details"].append(detail)
         if event.timestamp is not None:
-            bucket["caller_failures"][caller_resolved.display_name].append((event.timestamp, detail_index))
+            bucket["caller_failures"][detail["caller_identity"]].append((event.timestamp, detail_index))
 
     summaries: list[ErrorSummary] = []
     for (error_name, target_source, operation), bucket in sorted(
@@ -427,12 +428,23 @@ def _find_original_call(
     event: Event,
     call_index: dict[tuple[str | None, str | None, int], Event],
     snapshot_index: dict[str, CaptureNameInfo],
+    resolver: NameTimelineResolver,
 ) -> Event | None:
     if event.reply_serial is None:
         return None
 
-    for destination in _match_candidates(event.destination, snapshot_index):
-        for sender in _match_candidates(event.sender, snapshot_index):
+    for destination in _match_candidates(
+        event.destination,
+        snapshot_index,
+        resolver,
+        event.timestamp,
+    ):
+        for sender in _match_candidates(
+            event.sender,
+            snapshot_index,
+            resolver,
+            event.timestamp,
+        ):
             original = call_index.get((destination, sender, event.reply_serial))
             if original is not None:
                 return original
@@ -463,16 +475,19 @@ def _capture_name_info_from_resolved(resolved: ResolvedName) -> CaptureNameInfo 
 def _match_candidates(
     name: str | None,
     snapshot_index: dict[str, CaptureNameInfo],
+    resolver: NameTimelineResolver,
+    timestamp: float | None,
 ) -> tuple[str | None, ...]:
     if name is None:
         return (None,)
 
+    resolved = resolver.resolve_name(name, timestamp=timestamp)
     info = _snapshot_info_for(name, snapshot_index)
     preferred = info.name if info is not None else None
     owner = info.owner if info is not None else None
 
     candidates: list[str | None] = [name]
-    for candidate in (preferred, owner):
+    for candidate in (resolved.raw_name, resolved.display_name, resolved.owner, preferred, owner):
         if candidate not in candidates:
             candidates.append(candidate)
     if name.startswith(":"):
@@ -480,6 +495,17 @@ def _match_candidates(
             if candidate not in candidates:
                 candidates.append(candidate)
     return tuple(candidates)
+
+
+def _caller_identity_key(
+    caller_source: str,
+    resolved: ResolvedName,
+) -> tuple[str, str]:
+    if caller_source.startswith(":"):
+        return ("unique", caller_source)
+    if resolved.owner:
+        return ("owner", resolved.owner)
+    return ("name", caller_source)
 
 
 def _well_known_names_for_owner(

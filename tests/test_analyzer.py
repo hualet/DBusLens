@@ -1008,6 +1008,216 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(summary.details[1].target_process.owner, ":1.43")
         self.assertEqual(summary.details[1].target_process.cmdline, ["/usr/bin/example-service-new"])
 
+    def test_build_report_matches_historical_unique_owner_via_name_timeline(self) -> None:
+        events = [
+            Event(
+                timestamp=10.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=17,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=10.2,
+                message_type="error",
+                sender=":1.42",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=18,
+                reply_serial=17,
+                error_name="org.example.Error.Failed",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(),
+            names_timeline={
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.42",
+                            "pid": 2020,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service-old"],
+                            "error": None,
+                        },
+                        {
+                            "name": "org.example.Client",
+                            "owner": ":1.10",
+                            "pid": 1010,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-client"],
+                            "error": None,
+                        },
+                    ],
+                },
+                "events": [
+                    {
+                        "timestamp": 15.0,
+                        "name": "org.example.Service",
+                        "old_owner": ":1.42",
+                        "new_owner": ":1.43",
+                    }
+                ],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.43",
+                            "pid": 3030,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service-new"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "error": None,
+            },
+        )
+
+        summary = report.error_summaries[0]
+        self.assertEqual(summary.target, "org.example.Service")
+        self.assertEqual(summary.operation, "org.example.Demo.Ping")
+        self.assertEqual(summary.average_latency_ms, 200.0)
+        self.assertEqual(summary.details[0].destination, "org.example.Service")
+
+    def test_build_report_does_not_merge_retries_for_reused_caller_label(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=1,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=1.2,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=2,
+                reply_serial=1,
+                error_name="org.example.Error.Failed",
+            ),
+            Event(
+                timestamp=3.0,
+                message_type="method_call",
+                sender=":1.11",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=3,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=3.2,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.11",
+                path=None,
+                interface=None,
+                member=None,
+                serial=4,
+                reply_serial=3,
+                error_name="org.example.Error.Failed",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(),
+            names_timeline={
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Client",
+                            "owner": ":1.10",
+                            "pid": 1010,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-client-old"],
+                            "error": None,
+                        },
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.42",
+                            "pid": 2020,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service"],
+                            "error": None,
+                        },
+                    ],
+                },
+                "events": [
+                    {
+                        "timestamp": 2.0,
+                        "name": "org.example.Client",
+                        "old_owner": ":1.10",
+                        "new_owner": ":1.11",
+                    }
+                ],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Client",
+                            "owner": ":1.11",
+                            "pid": 1111,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-client-new"],
+                            "error": None,
+                        },
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.42",
+                            "pid": 2020,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service"],
+                            "error": None,
+                        },
+                    ],
+                },
+                "error": None,
+            },
+        )
+
+        summary = report.error_summaries[0]
+        self.assertEqual([detail.caller for detail in summary.details], ["org.example.Client", "org.example.Client"])
+        self.assertEqual(summary.unique_callers, 2)
+        self.assertEqual(summary.retry_count, 0)
+        self.assertEqual([detail.notes for detail in summary.details], ["raw=:1.10", "raw=:1.11"])
+
 
 if __name__ == "__main__":
     unittest.main()
