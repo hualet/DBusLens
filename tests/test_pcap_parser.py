@@ -127,6 +127,38 @@ class ParsePcapBytesTests(unittest.TestCase):
         self.assertEqual(result.events[0].error_name, "org.example.Error.Failed")
         self.assertEqual(result.events[0].reply_serial, 17)
 
+    def test_parse_pcap_formats_variants_and_bytes_for_body_preview(self) -> None:
+        pcap_bytes = build_pcap_bytes(
+            [
+                (
+                    1713081000.4,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender=":1.10",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Complex",
+                        signature="av",
+                        body=[
+                            [
+                                Variant("s", "hello"),
+                                Variant("ay", b"wsdd\x00"),
+                            ]
+                        ],
+                        serial=20,
+                    ),
+                )
+            ]
+        )
+
+        result = parse_pcap_bytes(pcap_bytes)
+
+        self.assertEqual(result.skipped_packets, 0)
+        self.assertEqual(len(result.events), 1)
+        self.assertEqual(result.events[0].signature, "av")
+        self.assertEqual(result.events[0].body_preview, "[['hello', '0x7773646400']]")
+
     def test_parse_pcap_skips_invalid_packets(self) -> None:
         buffer = io.BytesIO()
         writer = dpkt.pcap.Writer(buffer, linktype=dpkt.pcap.DLT_DBUS)

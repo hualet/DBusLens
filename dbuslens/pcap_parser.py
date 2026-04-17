@@ -6,6 +6,7 @@ from typing import BinaryIO, Callable
 
 import dpkt
 from dbus_fast._private.unmarshaller import Unmarshaller
+from dbus_fast.signature import Variant
 
 from dbuslens.models import Event, ParseResult
 
@@ -86,7 +87,36 @@ def parse_pcap_stream(
 def _preview_body(body: object, *, limit: int = 120) -> str | None:
     if body in (None, []):
         return None
-    preview = repr(body)
+    preview = repr(_normalize_preview_value(body))
     if len(preview) <= limit:
         return preview
     return f"{preview[: limit - 3]}..."
+
+
+def _normalize_preview_value(value: object) -> object:
+    if isinstance(value, Variant):
+        return _normalize_preview_value(value.value)
+    if isinstance(value, bytes):
+        return _preview_bytes(value)
+    if isinstance(value, list):
+        return [_normalize_preview_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_preview_value(item) for item in value)
+    if isinstance(value, dict):
+        return {
+            _normalize_preview_value(key): _normalize_preview_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _preview_bytes(value: bytes) -> str:
+    if not value:
+        return ""
+    try:
+        decoded = value.decode("utf-8")
+    except UnicodeDecodeError:
+        decoded = ""
+    if decoded and all(character.isprintable() or character in "\t\r\n" for character in decoded):
+        return decoded
+    return f"0x{value.hex()}"
