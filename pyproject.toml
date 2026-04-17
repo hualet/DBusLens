@@ -1,12 +1,38 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "dbuslens"
 version = "0.1.0"
+description = "Record and inspect D-Bus traffic from the terminal"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
+license = "GPL-3.0-only"
+authors = [{ name = "DBusLens contributors" }]
+keywords = ["dbus", "d-bus", "linux", "terminal", "textual"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
+]
 dependencies = [
     "dbus-fast>=4.0.4",
     "dpkt>=1.9.8",
+    "shtab>=1.7.2",
     "textual>=0.85.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hualet/DBusLens"
+Repository = "https://github.com/hualet/DBusLens"
+Issues = "https://github.com/hualet/DBusLens/issues"
 
 [project.scripts]
 dbuslens = "dbuslens.cli:main"

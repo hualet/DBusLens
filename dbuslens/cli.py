@@ -20,6 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="report a saved capture")
     report_parser.add_argument("--input", default="record.dblens")
 
+    completion_parser = subparsers.add_parser("completion", help="print shell completion script")
+    completion_parser.add_argument("shell", choices=["bash", "zsh"])
+
     return parser
 
 
@@ -31,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_record(args)
         if args.command == "report":
             return _handle_report(args)
+        if args.command == "completion":
+            return _handle_completion(args)
     except (RecordError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -58,6 +63,16 @@ def _handle_report(args: argparse.Namespace) -> int:
     if input_path.stat().st_size == 0:
         raise ValueError(f"input file is empty: {input_path}")
     run_report(input_path)
+    return 0
+
+
+def _handle_completion(args: argparse.Namespace) -> int:
+    try:
+        import shtab
+    except ModuleNotFoundError as exc:
+        raise ValueError("shell completion support is unavailable in this install") from exc
+
+    print(shtab.complete(build_parser(), shell=args.shell))
     return 0
 
 

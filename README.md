@@ -42,7 +42,22 @@ DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It store
 
 ## Quick Start
 
-Create the environment and install dependencies:
+Install the published tool:
+
+```bash
+uv tool install dbuslens
+```
+
+This installs the `dbuslens` command into your user tool path. `uv` documents that `uv tool install`
+exposes package executables on `PATH`, which matches the intended install flow.
+
+Runtime requirements:
+
+- Linux
+- `dbus-monitor`
+- `gdbus`
+
+If you are working on the project locally instead of installing from PyPI:
 
 ```bash
 uv sync
@@ -51,15 +66,27 @@ uv sync
 Record a capture:
 
 ```bash
-uv run dbuslens record --duration 10
-uv run dbuslens record --bus system --duration 60 --output /tmp/system.dblens
+dbuslens record --duration 10
+dbuslens record --bus system --duration 60 --output /tmp/system.dblens
 ```
 
 Open a saved capture in the terminal UI:
 
 ```bash
-uv run dbuslens report
-uv run dbuslens report --input /tmp/system.dblens
+dbuslens report
+dbuslens report --input /tmp/system.dblens
+```
+
+Enable shell completion:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+dbuslens completion bash > ~/.local/share/bash-completion/completions/dbuslens
+```
+
+```bash
+mkdir -p ~/.local/share/zsh/site-functions
+dbuslens completion zsh > ~/.local/share/zsh/site-functions/_dbuslens
 ```
 
 Format reference:

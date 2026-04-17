@@ -1,6 +1,8 @@
 name: Pylint
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
   build:
@@ -9,15 +11,12 @@ jobs:
       matrix:
         python-version: ["3.12"]
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pylint dbus-fast dpkt textual
-    - name: Analysing the code with pylint
-      run: |
-        pylint $(git ls-files '*.py')
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Install runtime dependencies
+        run: uv sync
+      - name: Analyse the code with pylint
+        run: uv tool run --from pylint --with dbus-fast --with dpkt --with textual pylint $(git ls-files '*.py')
