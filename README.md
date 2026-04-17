@@ -54,6 +54,9 @@ Format reference:
 
 - [`docs/dblens-format.md`](./docs/dblens-format.md)
 
+Recent `.dblens` captures also embed ownership timeline metadata, which helps `report` resolve
+short-lived D-Bus unique names back to service labels and process context.
+
 ## Operation Guide
 
 `dbuslens` has two main commands:

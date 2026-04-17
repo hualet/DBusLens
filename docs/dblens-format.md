@@ -16,6 +16,7 @@ A `.dblens` bundle currently contains:
 - `capture.cap`
 - `capture.profile`
 - `names.json`
+- `names_timeline.json`
 
 ## `meta.json`
 
@@ -66,6 +67,17 @@ Raw `dbus-monitor --profile` output. This is recorded for richer timing and futu
 
 A lightweight snapshot captured during recording. The first version stores discovered bus names and may include capture-time errors if lookup failed.
 
+### `names_timeline.json`
+
+Optional ownership history captured during `record`.
+
+- `initial_snapshot`: enriched snapshot at capture start
+- `events`: `org.freedesktop.DBus.NameOwnerChanged` entries
+- `final_snapshot`: enriched snapshot at capture end
+- `error`: best-effort capture failure detail, if timeline collection failed
+
+Report analysis uses this artifact to resolve unique names at event time. Older bundles may omit it.
+
 ## Versioning
 
 - DBusLens currently writes `bundle_version = 1`
@@ -76,4 +88,4 @@ A lightweight snapshot captured during recording. The first version stores disco
 
 - `dbuslens report` accepts `.dblens` bundles only
 - DBusLens currently reads the main event stream from the bundled `capture.cap`
-- `capture.profile` and `names.json` are stored now for future analysis improvements
+- `capture.profile`, `names.json`, and `names_timeline.json` are stored now for future analysis improvements
