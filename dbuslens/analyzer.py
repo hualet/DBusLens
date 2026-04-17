@@ -325,6 +325,7 @@ def _build_error_summaries(
         detail = {
             "caller": caller_resolved.display_name,
             "caller_process": _capture_name_info_from_resolved(caller_resolved),
+            "target_process": _capture_name_info_from_resolved(target_resolved),
             "latency_ms": _format_latency_ms(latency_ms),
             "notes": _join_notes(
                 "unmatched call" if original is None else "",
@@ -367,7 +368,7 @@ def _build_error_summaries(
             ErrorDetail(
                 caller=str(detail["caller"]),
                 caller_process=detail["caller_process"],
-                target_process=target_process,
+                target_process=detail["target_process"],
                 latency_ms=str(detail["latency_ms"]),
                 notes=str(detail["notes"]),
                 count=int(detail["count"]),

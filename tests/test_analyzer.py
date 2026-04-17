@@ -898,6 +898,116 @@ class BuildReportTests(unittest.TestCase):
 
         self.assertEqual(report.error_summaries[0].details[0].caller, "org.example.ShortLived")
 
+    def test_build_report_resolves_target_metadata_per_error_timestamp(self) -> None:
+        events = [
+            Event(
+                timestamp=10.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=7,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=10.2,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=8,
+                reply_serial=7,
+                error_name="org.example.Error.Failed",
+            ),
+            Event(
+                timestamp=20.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=9,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=20.4,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=10,
+                reply_serial=9,
+                error_name="org.example.Error.Failed",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(),
+            names_timeline={
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.42",
+                            "pid": 2020,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service-old"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "events": [
+                    {
+                        "timestamp": 15.0,
+                        "name": "org.example.Service",
+                        "old_owner": ":1.42",
+                        "new_owner": ":1.43",
+                    }
+                ],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.Service",
+                            "owner": ":1.43",
+                            "pid": 3030,
+                            "uid": 1000,
+                            "cmdline": ["/usr/bin/example-service-new"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "error": None,
+            },
+            resolve_process=lambda _: None,
+        )
+
+        summary = report.error_summaries[0]
+        self.assertEqual(summary.target, "org.example.Service")
+        self.assertEqual(summary.target_process.display_name, "org.example.Service [2020]")
+        self.assertEqual(summary.details[0].target_process.display_name, "org.example.Service [2020]")
+        self.assertEqual(summary.details[0].target_process.owner, ":1.42")
+        self.assertEqual(summary.details[0].target_process.cmdline, ["/usr/bin/example-service-old"])
+        self.assertEqual(summary.details[1].target_process.display_name, "org.example.Service [3030]")
+        self.assertEqual(summary.details[1].target_process.owner, ":1.43")
+        self.assertEqual(summary.details[1].target_process.cmdline, ["/usr/bin/example-service-new"])
+
 
 if __name__ == "__main__":
     unittest.main()
