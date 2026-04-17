@@ -8,11 +8,23 @@ DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It store
 
 ## Highlights
 
-- Record D-Bus traffic from the `session` or `system` bus with a fixed duration.
-- Open saved captures in a terminal UI built for quick inspection.
-- Browse traffic by `Senders`, `Members`, and `Errors`.
-- Use the detail pane to inspect row-level context, capture-time error diagnostics, and per-call argument previews without leaving the terminal.
-- Keep analysis workflow simple: capture first, report later.
+- **A D-Bus inspector that feels like a real tool**  
+  Clean, keyboard-first terminal UI built for investigation, not just dumping messages.
+
+- **Built for speed**  
+  Fast capture, fast load, and responsive browsing even when the trace is noisy.
+
+- **From traffic ranking to failure diagnosis**  
+  See top senders and members, then drill into error distribution, retries, call context, and arguments.
+
+- **Understands changing bus ownership**  
+  Recover service and process identity from short-lived unique names with capture-time snapshots and ownership timeline analysis.
+
+- **One workflow for session and system bus**  
+  Same commands, same bundle format, same inspection model.
+
+- **Simple like `perf`, focused on D-Bus**  
+  Capture now, inspect later, stay in the terminal.
 
 ## Screenshots
 
@@ -55,7 +67,8 @@ Format reference:
 - [`docs/dblens-format.md`](./docs/dblens-format.md)
 
 Recent `.dblens` captures also embed ownership timeline metadata, which helps `report` resolve
-short-lived D-Bus unique names back to service labels and process context.
+short-lived D-Bus unique names back to service labels, recover error call context across owner
+changes, and attach more accurate process metadata in the `Errors` view.
 
 ## Operation Guide
 
@@ -75,6 +88,7 @@ Typical workflow:
 2. Open the saved `.dblens` bundle with `report`.
 3. Switch between `Senders`, `Members`, and `Errors`.
 4. Move through the table and inspect the detail pane for the selected row or error summary.
+5. In `Errors`, use the details table to inspect resolved caller and target names, per-call arguments, and retry context.
 
 ## Keyboard Shortcuts
 

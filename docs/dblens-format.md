@@ -33,7 +33,8 @@ Example:
   "capture_files": {
     "pcap": "capture.cap",
     "profile": "capture.profile",
-    "names": "names.json"
+    "names": "names.json",
+    "names_timeline": "names_timeline.json"
   },
   "monitor": {
     "command": ["dbus-monitor", "--session", "--pcap"],
@@ -65,7 +66,16 @@ Raw `dbus-monitor --profile` output. This is recorded for richer timing and futu
 
 ### `names.json`
 
-A lightweight snapshot captured during recording. The first version stores discovered bus names and may include capture-time errors if lookup failed.
+A capture-time snapshot of bus names and process context. Entries may include:
+
+- `name`
+- `owner`
+- `pid`
+- `uid`
+- `cmdline`
+- `error`
+
+This snapshot is used as the baseline and fallback metadata source for report analysis.
 
 ### `names_timeline.json`
 
@@ -76,7 +86,13 @@ Optional ownership history captured during `record`.
 - `final_snapshot`: enriched snapshot at capture end
 - `error`: best-effort capture failure detail, if timeline collection failed
 
-Report analysis uses this artifact to resolve unique names at event time. Older bundles may omit it.
+Notes:
+
+- `events` may be empty on a quiet bus
+- older bundles may omit this file entirely
+- capture is best-effort; `error` records timeline collection failures without invalidating the bundle
+
+Report analysis uses this artifact to resolve unique names at event time, improve original-call matching across owner churn, and attach more accurate per-error caller and target metadata.
 
 ## Versioning
 
@@ -88,4 +104,6 @@ Report analysis uses this artifact to resolve unique names at event time. Older 
 
 - `dbuslens report` accepts `.dblens` bundles only
 - DBusLens currently reads the main event stream from the bundled `capture.cap`
-- `capture.profile`, `names.json`, and `names_timeline.json` are stored now for future analysis improvements
+- `names.json` is used for capture-time snapshot context and fallback metadata
+- `names_timeline.json` is used for event-time name resolution in error analysis when present
+- `capture.profile` remains stored for future diagnostics, but is not yet required by the current report UI
