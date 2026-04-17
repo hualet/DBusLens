@@ -249,6 +249,17 @@ class LoadReportTests(unittest.TestCase):
                         member="Ping",
                         serial=17,
                     ),
+                ),
+                (
+                    1713081000.3,
+                    Message(
+                        message_type=MessageType.ERROR,
+                        sender="org.example.Service",
+                        destination=":1.10",
+                        reply_serial=17,
+                        error_name="org.example.Error.Failed",
+                        serial=18,
+                    ),
                 )
             ]
         )
@@ -277,6 +288,12 @@ class LoadReportTests(unittest.TestCase):
             },
             "events": [
                 {
+                    "timestamp": 1713081000.0,
+                    "name": "org.example.Client",
+                    "old_owner": "",
+                    "new_owner": ":1.10",
+                },
+                {
                     "timestamp": 1713243600.5,
                     "name": "org.example.Service",
                     "old_owner": "",
@@ -286,7 +303,16 @@ class LoadReportTests(unittest.TestCase):
             "final_snapshot": {
                 "captured_at": "2026-04-16T10:20:40+08:00",
                 "bus": "session",
-                "names": [],
+                "names": [
+                    {
+                        "name": "org.example.Client",
+                        "owner": ":1.10",
+                        "pid": 1010,
+                        "uid": 1000,
+                        "cmdline": ["/usr/bin/example-client"],
+                        "error": None,
+                    }
+                ],
             },
             "error": None,
         }
@@ -324,7 +350,12 @@ class LoadReportTests(unittest.TestCase):
             report = load_report(path)
 
         self.assertEqual(report.source_path, str(path))
-        self.assertEqual(report.total_events, 1)
+        self.assertEqual(report.total_events, 2)
+        self.assertEqual(report.error_summaries[0].details[0].caller, "org.example.Client")
+        self.assertEqual(
+            report.error_summaries[0].details[0].caller_process.display_name,
+            "org.example.Client [1010]",
+        )
 
     def test_load_report_accepts_bundle_missing_names_timeline_member(self) -> None:
         capture = build_pcap_bytes(

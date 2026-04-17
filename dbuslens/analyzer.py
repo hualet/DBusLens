@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Callable
 
+from dbuslens.name_timeline import NameTimelineResolver, ResolvedName
 from dbuslens.models import (
     AnalysisReport,
     CaptureNameInfo,
@@ -28,11 +29,13 @@ def build_report(
     source_path: str = "<memory>",
     skipped_blocks: int = 0,
     snapshot_names: dict[str, object] | None = None,
+    names_timeline: dict[str, object] | None = None,
     resolve_process: Callable[[str], ProcessInfo | None] = resolve_process_name,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> AnalysisReport:
     service_name_for = _build_service_name_resolver(events, resolve_process)
     snapshot_index = _build_snapshot_index(snapshot_names)
+    resolver = NameTimelineResolver.from_payload(snapshot_names, names_timeline)
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
     error_totals: Counter[str] = Counter()
@@ -75,6 +78,7 @@ def build_report(
         events,
         call_index,
         snapshot_index,
+        resolver,
     )
 
     return AnalysisReport(
@@ -268,6 +272,7 @@ def _build_error_summaries(
     events: list[Event],
     call_index: dict[tuple[str | None, str | None, int], Event],
     snapshot_index: dict[str, CaptureNameInfo],
+    resolver: NameTimelineResolver,
 ) -> list[ErrorSummary]:
     buckets: dict[tuple[str, str, str], dict[str, object]] = {}
 
@@ -278,6 +283,8 @@ def _build_error_summaries(
         original = _find_original_call(event, call_index, snapshot_index)
 
         target_source, caller_source, operation = _build_error_identity(event, original)
+        target_resolved = resolver.resolve_name(target_source, timestamp=event.timestamp)
+        caller_resolved = resolver.resolve_name(caller_source, timestamp=event.timestamp)
         error_name = event.error_name or "<unknown>"
         key = (error_name, target_source, operation)
 
@@ -291,8 +298,11 @@ def _build_error_summaries(
                 "latency_samples": 0,
                 "caller_failures": defaultdict(list),
                 "details": [],
+                "target_process": _capture_name_info_from_resolved(target_resolved),
             },
         )
+        if bucket["target_process"] is None:
+            bucket["target_process"] = _capture_name_info_from_resolved(target_resolved)
 
         bucket["count"] = int(bucket["count"]) + 1
 
@@ -313,20 +323,27 @@ def _build_error_summaries(
 
         detail_index = len(bucket["details"])
         detail = {
-            "caller": caller_source,
-            "caller_process": _snapshot_info_for(caller_source, snapshot_index),
+            "caller": caller_resolved.display_name,
+            "caller_process": _capture_name_info_from_resolved(caller_resolved),
             "latency_ms": _format_latency_ms(latency_ms),
-            "notes": "unmatched call" if original is None else "",
+            "notes": _join_notes(
+                "unmatched call" if original is None else "",
+                (
+                    f"raw={caller_resolved.raw_name}"
+                    if caller_resolved.raw_name != caller_resolved.display_name
+                    else ""
+                ),
+            ),
             "count": 1,
             "timestamp": event.timestamp,
-            "destination": target_source,
+            "destination": target_resolved.display_name,
             "member": _member_name_for(original, operation),
             "path": original.path if original and original.path else "-",
             "args_preview": _args_preview_for(original),
         }
         bucket["details"].append(detail)
         if event.timestamp is not None:
-            bucket["caller_failures"][caller_source].append((event.timestamp, detail_index))
+            bucket["caller_failures"][caller_resolved.display_name].append((event.timestamp, detail_index))
 
     summaries: list[ErrorSummary] = []
     for (error_name, target_source, operation), bucket in sorted(
@@ -334,7 +351,7 @@ def _build_error_summaries(
         key=lambda item: (-int(item[1]["count"]), item[0][0], item[0][1], item[0][2]),
     ):
         caller_failures = bucket["caller_failures"]
-        target_process = _snapshot_info_for(target_source, snapshot_index)
+        target_process = bucket["target_process"]
         retry_count = 0
         raw_details = bucket["details"]
         for failures in caller_failures.values():
@@ -428,6 +445,20 @@ def _snapshot_info_for(
     return snapshot_index.get(name)
 
 
+def _capture_name_info_from_resolved(resolved: ResolvedName) -> CaptureNameInfo | None:
+    if resolved.pid is None and (
+        resolved.raw_name is None or resolved.display_name == resolved.raw_name
+    ):
+        return None
+    return CaptureNameInfo(
+        name=resolved.display_name,
+        owner=resolved.owner,
+        pid=resolved.pid,
+        uid=resolved.uid,
+        cmdline=resolved.cmdline,
+    )
+
+
 def _match_candidates(
     name: str | None,
     snapshot_index: dict[str, CaptureNameInfo],
@@ -506,6 +537,14 @@ def _append_note(existing: str, note: str) -> str:
     if note in existing:
         return existing
     return f"{existing}; {note}"
+
+
+def _join_notes(*notes: str) -> str:
+    value = ""
+    for note in notes:
+        if note:
+            value = _append_note(value, note)
+    return value
 
 
 def _args_preview_for(original: Event | None) -> str:

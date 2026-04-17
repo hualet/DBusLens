@@ -333,8 +333,8 @@ class BuildReportTests(unittest.TestCase):
         )
         self.assertEqual(summary.details[0].latency_ms, "200.0 ms")
         self.assertEqual(summary.details[1].latency_ms, "400.0 ms")
-        self.assertEqual(summary.details[0].notes, "")
-        self.assertEqual(summary.details[1].notes, "retried within 5s")
+        self.assertEqual(summary.details[0].notes, "raw=:1.10")
+        self.assertEqual(summary.details[1].notes, "raw=:1.10; retried within 5s")
         self.assertEqual(report.error_rows[0].name, "org.example.Error.Failed")
 
     def test_build_report_keeps_alias_targets_separate_when_pids_match(self) -> None:
@@ -556,7 +556,7 @@ class BuildReportTests(unittest.TestCase):
         summaries = {summary.target: summary for summary in report.error_summaries}
         self.assertEqual(summaries["org.example.Service"].details[0].caller, "<unknown-caller>")
         self.assertEqual(summaries["org.example.Service"].owner_label, "org.example.Service [2020]")
-        self.assertEqual(summaries["<unknown-target>"].details[0].caller, ":1.10")
+        self.assertEqual(summaries["<unknown-target>"].details[0].caller, "org.example.Client")
         self.assertEqual(
             summaries["<unknown-target>"].details[0].caller_process,
             CaptureNameInfo(
@@ -705,9 +705,15 @@ class BuildReportTests(unittest.TestCase):
 
         summaries = {summary.target: summary for summary in report.error_summaries}
         self.assertEqual(summaries["org.example.ServiceA"].retry_count, 0)
-        self.assertEqual([detail.notes for detail in summaries["org.example.ServiceA"].details], ["", ""])
+        self.assertEqual(
+            [detail.notes for detail in summaries["org.example.ServiceA"].details],
+            ["raw=:1.10", "raw=:1.10"],
+        )
         self.assertEqual(summaries["org.example.ServiceB"].retry_count, 1)
-        self.assertEqual([detail.notes for detail in summaries["org.example.ServiceB"].details], ["", "retried within 5s"])
+        self.assertEqual(
+            [detail.notes for detail in summaries["org.example.ServiceB"].details],
+            ["raw=:1.10", "raw=:1.10; retried within 5s"],
+        )
 
     def test_build_report_matches_errors_even_when_call_appears_later(self) -> None:
         events = [
@@ -764,7 +770,7 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(summary.target, "org.example.Service")
         self.assertEqual(summary.operation, "org.example.Demo.Ping")
         self.assertEqual(summary.average_latency_ms, 500.0)
-        self.assertEqual(summary.details[0].caller, ":1.10")
+        self.assertEqual(summary.details[0].caller, "org.example.Client")
 
     def test_build_report_matches_error_reply_when_error_uses_unique_owner_name(self) -> None:
         events = [
@@ -822,6 +828,75 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(summary.operation, "org.example.Demo.Ping")
         self.assertEqual(summary.average_latency_ms, 500.0)
         self.assertEqual(summary.owner_label, "org.example.Service [2020]")
+
+    def test_build_report_resolves_error_caller_via_name_timeline(self) -> None:
+        events = [
+            Event(
+                timestamp=10.0,
+                message_type="method_call",
+                sender=":1.99",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=7,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=10.2,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.99",
+                path=None,
+                interface=None,
+                member=None,
+                serial=8,
+                reply_serial=7,
+                error_name="org.example.Error.Failed",
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(),
+            names_timeline={
+                "bus": "session",
+                "started_at": "2026-04-16T10:20:30+08:00",
+                "ended_at": "2026-04-16T10:20:40+08:00",
+                "initial_snapshot": {
+                    "captured_at": "2026-04-16T10:20:30+08:00",
+                    "bus": "session",
+                    "names": [],
+                },
+                "events": [
+                    {
+                        "timestamp": 9.9,
+                        "name": "org.example.ShortLived",
+                        "old_owner": "",
+                        "new_owner": ":1.99",
+                    }
+                ],
+                "final_snapshot": {
+                    "captured_at": "2026-04-16T10:20:40+08:00",
+                    "bus": "session",
+                    "names": [
+                        {
+                            "name": "org.example.ShortLived",
+                            "owner": ":1.99",
+                            "pid": 9900,
+                            "uid": 1000,
+                            "cmdline": ["/bin/short-lived"],
+                            "error": None,
+                        }
+                    ],
+                },
+                "error": None,
+            },
+            resolve_process=lambda _: None,
+        )
+
+        self.assertEqual(report.error_summaries[0].details[0].caller, "org.example.ShortLived")
 
 
 if __name__ == "__main__":
