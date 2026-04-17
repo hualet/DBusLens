@@ -22,8 +22,10 @@ Use `uv` for environment and dependency management.
 - `uv run dbuslens record --duration 10`: capture session bus traffic to `./record.cap`
 - `uv run dbuslens report`: open the default capture in the TUI
 - `./.venv/bin/python -m unittest discover -s tests -v`: run the full test suite
+- `uv tool run --from pylint --with dbus-fast --with dpkt --with textual pylint $(git ls-files '*.py')`: run repository lint checks
 - `./.venv/bin/python -m dbuslens --help`: verify CLI wiring
 
+After any code change, run the relevant unit tests and run lint before committing.
 When changing CLI behavior, run both the unit tests and the help command before committing.
 
 ## Coding Style & Naming Conventions

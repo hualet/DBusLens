@@ -1,7 +1,7 @@
 import unittest
 
 from dbuslens.analyzer import build_report
-from dbuslens.models import CaptureNameInfo, ErrorDetail, ErrorSummary, Event, ProcessInfo
+from dbuslens.models import CaptureNameInfo, Event, ProcessInfo
 
 
 def _snapshot_names(*entries: dict[str, object]) -> dict[str, object]:

@@ -15,7 +15,6 @@ from dbuslens.report_app import (
     ReportAppState,
     detail_column_widths,
     detail_columns,
-    detail_lines,
     detail_rows,
     main_column_widths,
     main_columns,

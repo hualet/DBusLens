@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from pathlib import Path
 import sys
 
@@ -68,7 +69,7 @@ def _handle_report(args: argparse.Namespace) -> int:
 
 def _handle_completion(args: argparse.Namespace) -> int:
     try:
-        import shtab
+        shtab = importlib.import_module("shtab")
     except ModuleNotFoundError as exc:
         raise ValueError("shell completion support is unavailable in this install") from exc
 
