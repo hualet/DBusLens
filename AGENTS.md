@@ -44,6 +44,10 @@ Keep terminal-facing text short and literal. Avoid adding unused abstractions.
 
 Tests use `unittest`. Add or update tests for every behavior change, especially parser, analyzer, and CLI defaults. Prefer deterministic fixture data over live D-Bus traffic. For packet parsing, generate synthetic `.pcap` payloads in tests rather than depending on local bus access.
 
+## Performance Optimization Gotcha
+
+When working on performance problems, do not guess first. Measure the current behavior, profile the real bottleneck, and only then propose or implement an optimization plan. Prefer evidence from timing splits or profilers over intuition.
+
 ## Commit & Pull Request Guidelines
 
 Follow Conventional Commits, as used in history:
