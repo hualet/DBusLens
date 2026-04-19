@@ -17,11 +17,11 @@ class PlotTests(unittest.TestCase):
     def test_build_parser_defines_plot_subcommand(self) -> None:
         parser = build_parser()
 
-        args = parser.parse_args(["plot", "--input", "capture.dblens"])
+        args = parser.parse_args(["plot"])
 
         self.assertEqual(args.command, "plot")
-        self.assertEqual(args.input, "capture.dblens")
-        self.assertEqual(args.output, "-")
+        self.assertEqual(args.input, "record.dblens")
+        self.assertIsNone(args.output)
         self.assertEqual(args.format, "dot")
         self.assertEqual(args.raw, False)
 
@@ -246,6 +246,64 @@ class PlotTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertIn('":1.10" -> "org.example.Service" [label="2"];', output_path.read_text())
+
+    def test_handle_plot_uses_default_output_path_from_input(self) -> None:
+        capture = build_pcap_bytes(
+            [
+                (
+                    1.0,
+                    Message(
+                        message_type=MessageType.METHOD_CALL,
+                        sender="org.example.Client",
+                        destination="org.example.Service",
+                        path="/org/example/Demo",
+                        interface="org.example.Demo",
+                        member="Ping",
+                        serial=1,
+                    ),
+                ),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "sample.dblens"
+            default_output_path = Path(tmpdir) / "sample.dot"
+            write_bundle(
+                input_path,
+                BundleContents(
+                    metadata=BundleMetadata(
+                        bundle_version=1,
+                        created_at="2026-04-19T10:20:30+08:00",
+                        bus="session",
+                        duration_seconds=10,
+                        capture_files={
+                            "pcap": "capture.cap",
+                            "profile": "capture.profile",
+                            "names": "names.json",
+                        },
+                        monitor={
+                            "command": ["dbus-monitor", "--session", "--pcap"],
+                            "profile_command": ["dbus-monitor", "--session", "--profile"],
+                            "stderr": "",
+                            "mode": "monitor",
+                        },
+                    ),
+                    pcap_bytes=capture,
+                    profile_text="",
+                    names={"captured_at": "2026-04-19T10:20:31+08:00", "bus": "session", "names": []},
+                ),
+            )
+
+            exit_code = _handle_plot(
+                Namespace(input=str(input_path), output=None, format="dot", raw=False)
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(default_output_path.exists())
+            self.assertIn(
+                '"org.example.Client" -> "org.example.Service" [label="1"];',
+                default_output_path.read_text(),
+            )
 
 
 if __name__ == "__main__":

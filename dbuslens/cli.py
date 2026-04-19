@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     plot_parser = subparsers.add_parser("plot", help="write a dependency graph in dot format")
     plot_parser.add_argument("--input", default="record.dblens")
-    plot_parser.add_argument("--output", default="-")
+    plot_parser.add_argument("--output")
     plot_parser.add_argument("--format", choices=["dot"], default="dot")
     plot_parser.add_argument("--raw", action="store_true", help="keep raw unique-name nodes")
 
@@ -90,7 +90,7 @@ def _handle_plot(args: argparse.Namespace) -> int:
         print(dot, end="")
         return 0
 
-    output_path = Path(args.output)
+    output_path = Path(args.output) if args.output else input_path.with_suffix(".dot")
     output_path.write_text(dot, encoding="utf-8")
     print(output_path)
     return 0

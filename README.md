@@ -107,8 +107,10 @@ dbuslens report --input /tmp/system.dblens
 Generate a dependency graph in Graphviz DOT format:
 
 ```bash
-dbuslens plot --input /tmp/system.dblens > graph.dot
-dbuslens plot --input /tmp/system.dblens --raw > graph-raw.dot
+dbuslens plot
+dbuslens plot --input /tmp/system.dblens
+dbuslens plot --input /tmp/system.dblens --output graph.dot
+dbuslens plot --input /tmp/system.dblens --raw --output graph-raw.dot
 ```
 
 `plot` writes a simplified dependency graph by default:
@@ -116,12 +118,16 @@ dbuslens plot --input /tmp/system.dblens --raw > graph-raw.dot
 - nodes prefer captured well-known service names over transient unique names
 - `org.freedesktop.DBus` traffic is hidden
 
+When `--output` is omitted, `plot` writes next to the input bundle with a `.dot` suffix.
+Use `--output -` when you want the DOT content on stdout.
+
 Use `--raw` when you want the unfiltered graph with raw unique-name nodes.
 
 Default behavior:
 
 - `record` uses the `session` bus by default
 - `report` reads `record.dblens` by default
+- `plot` reads `record.dblens` and writes `record.dot` by default
 
 Typical workflow:
 
