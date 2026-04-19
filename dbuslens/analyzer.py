@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from functools import lru_cache
+from pathlib import Path
 from typing import Callable
 
 from dbuslens.name_timeline import NameTimelineResolver, ResolvedName
@@ -32,12 +34,20 @@ def build_report(
     skipped_blocks: int = 0,
     snapshot_names: dict[str, object] | None = None,
     names_timeline: dict[str, object] | None = None,
-    resolve_process: Callable[[str], ProcessInfo | None] = resolve_process_name,
+    resolve_process: Callable[[str], ProcessInfo | None] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> AnalysisReport:
-    service_name_for = _build_service_name_resolver(events, resolve_process)
     snapshot_index = _build_snapshot_index(snapshot_names)
     resolver = NameTimelineResolver.from_payload(snapshot_names, names_timeline)
+    runtime_resolve_process = resolve_process_name if resolve_process is None else resolve_process
+    cached_resolve_process = _cached_process_resolver(runtime_resolve_process)
+    process_for_display = _build_process_display_resolver(
+        snapshot_index,
+        resolver,
+        cached_resolve_process,
+        prefer_capture_metadata=resolve_process is None,
+    )
+    service_name_for = _build_service_name_resolver(events, process_for_display)
     outbound_totals: Counter[str] = Counter()
     inbound_totals: Counter[str] = Counter()
     error_totals: Counter[str] = Counter()
@@ -94,12 +104,46 @@ def build_report(
         total_events=len(events),
         actionable_events=actionable_events,
         skipped_blocks=skipped_blocks,
-        outbound_rows=_build_rows(outbound_totals, outbound_children, resolve_process),
-        inbound_rows=_build_rows(inbound_totals, inbound_children, resolve_process),
-        error_rows=_build_error_rows(error_totals, error_children, resolve_process),
+        outbound_rows=_build_rows(outbound_totals, outbound_children, process_for_display),
+        inbound_rows=_build_rows(inbound_totals, inbound_children, process_for_display),
+        error_rows=_build_error_rows(error_totals, error_children, process_for_display),
         latency_summaries=latency_summaries,
         error_summaries=error_summaries,
     )
+
+
+def _cached_process_resolver(
+    resolve_process: Callable[[str], ProcessInfo | None],
+) -> Callable[[str], ProcessInfo | None]:
+    @lru_cache(maxsize=None)
+    def cached(name: str) -> ProcessInfo | None:
+        return resolve_process(name)
+
+    return cached
+
+
+def _build_process_display_resolver(
+    snapshot_index: dict[str, CaptureNameInfo],
+    resolver: NameTimelineResolver,
+    fallback_resolve_process: Callable[[str], ProcessInfo | None],
+    *,
+    prefer_capture_metadata: bool,
+) -> Callable[[str], ProcessInfo | None]:
+    @lru_cache(maxsize=None)
+    def resolve(name: str) -> ProcessInfo | None:
+        if not _looks_like_service(name):
+            return None
+        if prefer_capture_metadata and (process := _process_info_from_capture_name(snapshot_index.get(name))):
+            return process
+        if prefer_capture_metadata:
+            resolved = resolver.resolve_name(name, timestamp=None)
+            if process := _process_info_from_capture_name(
+                _capture_name_info_from_resolved(resolved)
+            ):
+                return process
+        return fallback_resolve_process(name)
+
+    return resolve
 
 
 def _build_rows(
@@ -136,13 +180,6 @@ def _build_service_name_resolver(
     events: list[Event],
     resolve_process: Callable[[str], ProcessInfo | None],
 ) -> Callable[[str], str]:
-    process_cache: dict[str, ProcessInfo | None] = {}
-
-    def cached_process(name: str) -> ProcessInfo | None:
-        if name not in process_cache:
-            process_cache[name] = resolve_process(name) if _looks_like_service(name) else None
-        return process_cache[name]
-
     names = {
         name
         for event in events
@@ -153,7 +190,7 @@ def _build_service_name_resolver(
 
     names_by_pid: dict[int, set[str]] = defaultdict(set)
     for name in names:
-        process = cached_process(name)
+        process = resolve_process(name)
         if process and process.pid is not None:
             names_by_pid[process.pid].add(name)
 
@@ -166,7 +203,7 @@ def _build_service_name_resolver(
     }
 
     def resolve_name(name: str) -> str:
-        process = cached_process(name)
+        process = resolve_process(name)
         if process is None or process.pid is None:
             return name
         return preferred_by_pid.get(process.pid, name)
@@ -570,6 +607,16 @@ def _capture_name_info_from_resolved(resolved: ResolvedName) -> CaptureNameInfo 
         uid=resolved.uid,
         cmdline=resolved.cmdline,
     )
+
+
+def _process_info_from_capture_name(info: CaptureNameInfo | None) -> ProcessInfo | None:
+    if info is None or info.pid is None:
+        return None
+    if info.cmdline:
+        command = next((part for part in info.cmdline if part), "")
+        if command:
+            return ProcessInfo(short_name=Path(command).name, pid=info.pid)
+    return ProcessInfo(short_name=info.name, pid=info.pid)
 
 
 def _match_candidates(

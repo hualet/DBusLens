@@ -16,6 +16,7 @@ DBUS_ARGS = (
 )
 
 
+@lru_cache(maxsize=512)
 def resolve_process_name(service: str) -> ProcessInfo | None:
     if not service or service == "<unknown>":
         return None

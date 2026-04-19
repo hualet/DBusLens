@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from dbuslens.analyzer import build_report
 from dbuslens.models import CaptureNameInfo, Event, ProcessInfo
@@ -167,6 +168,137 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(report.latency_summaries[0].target, "org.example.Service")
         self.assertEqual(report.latency_summaries[0].operation, "org.example.Demo.Ping")
         self.assertEqual(report.latency_summaries[0].average_latency_ms, 1000.0)
+
+    def test_build_report_reuses_cached_process_resolution(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=1,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.0,
+                message_type="signal",
+                sender="org.example.Service",
+                destination=None,
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Changed",
+                serial=2,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=3.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=3,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=4.0,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=4,
+                reply_serial=3,
+                error_name="org.example.Error.Timeout",
+            ),
+        ]
+        calls: list[str] = []
+        resolved = {
+            ":1.10": ProcessInfo(short_name="demo-client", pid=1010),
+            "org.example.Service": ProcessInfo(short_name="demo-service", pid=2020),
+            "<unknown-target>": None,
+        }
+
+        def resolve_process(name: str) -> ProcessInfo | None:
+            calls.append(name)
+            return resolved.get(name)
+
+        build_report(events, resolve_process=resolve_process)
+
+        self.assertEqual(calls.count(":1.10"), 1)
+        self.assertEqual(calls.count("org.example.Service"), 1)
+
+    def test_build_report_uses_capture_metadata_before_runtime_process_lookup(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Ping",
+                serial=1,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.0,
+                message_type="signal",
+                sender="org.example.Service",
+                destination=None,
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Changed",
+                serial=2,
+                reply_serial=None,
+                error_name=None,
+            ),
+        ]
+
+        def fail_for_known_names(name: str) -> ProcessInfo | None:
+            if name in {":1.10", "org.example.Service"}:
+                raise AssertionError("runtime resolver should not be used for known capture names")
+
+        with patch("dbuslens.analyzer.resolve_process_name", side_effect=fail_for_known_names):
+            report = build_report(
+                events,
+                snapshot_names=_snapshot_names(
+                    {
+                        "name": "org.example.Service",
+                        "owner": ":1.42",
+                        "pid": 2020,
+                        "uid": 1000,
+                        "cmdline": ["/usr/bin/example-service"],
+                        "error": None,
+                    },
+                    {
+                        "name": "org.example.Client",
+                        "owner": ":1.10",
+                        "pid": 1010,
+                        "uid": 1000,
+                        "cmdline": ["/usr/bin/example-client"],
+                        "error": None,
+                    },
+                ),
+            )
+
+        self.assertEqual(
+            report.outbound_rows[0].process,
+            ProcessInfo(short_name="example-client", pid=1010),
+        )
+        self.assertEqual(
+            report.outbound_rows[1].process,
+            ProcessInfo(short_name="example-service", pid=2020),
+        )
 
     def test_build_report_ranks_calls_by_average_latency(self) -> None:
         events = [
