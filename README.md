@@ -115,7 +115,6 @@ dbuslens plot --input /tmp/system.dblens --raw > graph-raw.dot
 
 - nodes prefer captured well-known service names over transient unique names
 - `org.freedesktop.DBus` traffic is hidden
-- one-off edges are filtered out to keep the graph readable
 
 Use `--raw` when you want the unfiltered graph with raw unique-name nodes.
 

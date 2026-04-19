@@ -128,13 +128,13 @@ class PlotTests(unittest.TestCase):
 
         self.assertIn('":1.10" -> "org.example.Service" [label="2"];', dot)
 
-    def test_build_dependency_dot_default_filter_hides_single_edge(self) -> None:
+    def test_build_dependency_dot_keeps_single_edge_by_default(self) -> None:
         dot = build_dependency_dot(
             [
                 Event(
                     timestamp=1.0,
                     message_type="method_call",
-                    sender=":1.10",
+                    sender="org.example.Client",
                     destination="org.example.Service",
                     path="/org/example/Demo",
                     interface="org.example.Demo",
@@ -146,7 +146,7 @@ class PlotTests(unittest.TestCase):
             ]
         )
 
-        self.assertNotIn('":1.10" -> "org.example.Service"', dot)
+        self.assertIn('"org.example.Client" -> "org.example.Service" [label="1"];', dot)
 
     def test_build_dependency_dot_hides_unresolved_unique_names_in_simplified_mode(self) -> None:
         dot = build_dependency_dot(

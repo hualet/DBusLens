@@ -22,7 +22,7 @@ def build_dependency_dot(
 ) -> str:
     resolver = NameTimelineResolver.from_payload(snapshot_names, names_timeline)
     edge_counts: Counter[tuple[str, str]] = Counter()
-    threshold = min_count if min_count is not None else (1 if raw else 2)
+    threshold = min_count if min_count is not None else 1
 
     for event in events:
         if event.message_type != "method_call":
