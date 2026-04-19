@@ -6,6 +6,8 @@ from dbuslens.models import (
     DetailRow,
     ErrorDetail,
     ErrorSummary,
+    LatencyDetail,
+    LatencySummary,
     ProcessInfo,
     Row,
 )
@@ -51,6 +53,59 @@ def _make_report() -> AnalysisReport:
             )
         ],
         error_rows=[],
+        latency_summaries=[
+            LatencySummary(
+                target="org.example.Service",
+                operation="org.example.Demo.Slow",
+                count=2,
+                average_latency_ms=500.0,
+                min_latency_ms=400.0,
+                max_latency_ms=600.0,
+                target_process=CaptureNameInfo(
+                    name="org.example.Service",
+                    owner=":1.42",
+                    pid=4242,
+                    uid=1000,
+                    cmdline=["/usr/bin/demo-service"],
+                ),
+                details=[
+                    LatencyDetail(
+                        caller=":1.10",
+                        caller_process=None,
+                        target="org.example.Service",
+                        target_process=CaptureNameInfo(
+                            name="org.example.Service",
+                            owner=":1.42",
+                            pid=4242,
+                            uid=1000,
+                            cmdline=["/usr/bin/demo-service"],
+                        ),
+                        operation="org.example.Demo.Slow",
+                        latency_ms="600.0 ms",
+                        timestamp=1.6,
+                        path="/org/example/Demo",
+                        args_preview="['first']",
+                    ),
+                    LatencyDetail(
+                        caller=":1.11",
+                        caller_process=None,
+                        target="org.example.Service",
+                        target_process=CaptureNameInfo(
+                            name="org.example.Service",
+                            owner=":1.42",
+                            pid=4242,
+                            uid=1000,
+                            cmdline=["/usr/bin/demo-service"],
+                        ),
+                        operation="org.example.Demo.Slow",
+                        latency_ms="400.0 ms",
+                        timestamp=2.4,
+                        path="/org/example/Demo",
+                        args_preview="['second']",
+                    ),
+                ],
+            )
+        ],
         error_summaries=[
             ErrorSummary(
                 error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
@@ -121,6 +176,12 @@ class ReportAppStateTests(unittest.TestCase):
         self.assertEqual(state.active_view, "errors")
         self.assertEqual(state.current_row.error_name, "org.freedesktop.DBus.Error.NameHasNoOwner")
         self.assertEqual(main_columns(state), ("Count", "Error", "Target", "Operation"))
+
+        state.set_view("latency")
+
+        self.assertEqual(state.active_view, "latency")
+        self.assertEqual(state.current_row.operation, "org.example.Demo.Slow")
+        self.assertEqual(main_columns(state), ("Avg", "Count", "Target", "Operation"))
 
     def test_current_row_returns_none_for_empty_or_out_of_range_selection(self) -> None:
         report = _make_report()
@@ -198,6 +259,25 @@ class ReportAppStateTests(unittest.TestCase):
             ],
         )
 
+        state.set_view("latency")
+
+        self.assertEqual(
+            main_rows(state),
+            [("500.0 ms", "2", "org.example.Service", "org.example.Demo.Slow")],
+        )
+        self.assertEqual(
+            detail_lines(state),
+            [
+                "Selected: org.example.Demo.Slow",
+                "Target: org.example.Service",
+                "Samples: 2",
+                "Average latency: 500.0 ms",
+                "Min latency: 400.0 ms",
+                "Max latency: 600.0 ms",
+                "Target owner at capture time: :1.42 [4242]",
+            ],
+        )
+
     def test_report_app_provides_detail_table_rows(self) -> None:
         report = AnalysisReport(
             source_path="sample.log",
@@ -235,6 +315,59 @@ class ReportAppStateTests(unittest.TestCase):
                 )
             ],
             error_rows=[],
+            latency_summaries=[
+                LatencySummary(
+                    target="org.example.Service",
+                    operation="org.example.Demo.Slow",
+                    count=2,
+                    average_latency_ms=500.0,
+                    min_latency_ms=400.0,
+                    max_latency_ms=600.0,
+                    target_process=CaptureNameInfo(
+                        name="org.example.Service",
+                        owner=":1.42",
+                        pid=4242,
+                        uid=1000,
+                        cmdline=["/usr/bin/demo-service"],
+                    ),
+                    details=[
+                        LatencyDetail(
+                            caller=":1.10",
+                            caller_process=None,
+                            target="org.example.Service",
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            operation="org.example.Demo.Slow",
+                            latency_ms="600.0 ms",
+                            timestamp=1.6,
+                            path="/org/example/Demo",
+                            args_preview="['first']",
+                        ),
+                        LatencyDetail(
+                            caller=":1.11",
+                            caller_process=None,
+                            target="org.example.Service",
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            operation="org.example.Demo.Slow",
+                            latency_ms="400.0 ms",
+                            timestamp=2.4,
+                            path="/org/example/Demo",
+                            args_preview="['second']",
+                        ),
+                    ],
+                )
+            ],
             error_summaries=[
                 ErrorSummary(
                     error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
@@ -330,6 +463,20 @@ class ReportAppStateTests(unittest.TestCase):
             [
                 ("1.000s", ":1.10", "org.example.Service", "GetNameOwner", "['svc-a']", "125.0 ms", "retried within 5s"),
                 ("2.000s", ":1.11", "org.example.Service", "GetNameOwner", "['svc-b']", "375.0 ms", "-"),
+            ],
+        )
+
+        state.set_view("latency")
+
+        self.assertEqual(
+            detail_columns(state),
+            ("Time", "Caller", "Target", "Operation", "Args", "Latency"),
+        )
+        self.assertEqual(
+            detail_rows(state),
+            [
+                ("1.600s", ":1.10", "org.example.Service", "org.example.Demo.Slow", "['first']", "600.0 ms"),
+                ("2.400s", ":1.11", "org.example.Service", "org.example.Demo.Slow", "['second']", "400.0 ms"),
             ],
         )
 

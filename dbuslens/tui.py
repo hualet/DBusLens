@@ -76,6 +76,7 @@ class DBusLensReportApp(App[None]):
     BINDINGS = [
         ("s", "show_outbound", "Senders"),
         ("m", "show_inbound", "Members"),
+        ("l", "show_latency", "Latency"),
         ("left", "show_outbound", "Senders"),
         ("right", "show_inbound", "Members"),
         ("e", "show_errors", "Errors"),
@@ -251,6 +252,7 @@ class DBusLensReportApp(App[None]):
             yield ListView(
                 ListItem(Label("Senders")),
                 ListItem(Label("Members")),
+                ListItem(Label("Latency")),
                 ListItem(Label("Errors")),
                 id="view-nav",
             )
@@ -291,13 +293,14 @@ class DBusLensReportApp(App[None]):
 
     def _populate_navigation(self) -> None:
         nav = self.query_one("#view-nav", ListView)
-        nav.index = {"outbound": 0, "inbound": 1, "errors": 2}[self.state.active_view]
+        nav.index = {"outbound": 0, "inbound": 1, "latency": 2, "errors": 3}[self.state.active_view]
 
     def _populate_main_table(self) -> None:
         table = self.query_one("#main-table", DataTable)
         table.border_title = {
             "outbound": " senders ",
             "inbound": " members ",
+            "latency": " latency ",
             "errors": " errors ",
         }[self.state.active_view]
         table.cursor_type = "row"
@@ -319,6 +322,7 @@ class DBusLensReportApp(App[None]):
         table.border_title = {
             "outbound": " members ",
             "inbound": " senders ",
+            "latency": " calls ",
             "errors": " details ",
         }[self.state.active_view]
         table.cursor_type = "row"
@@ -343,6 +347,11 @@ class DBusLensReportApp(App[None]):
     def action_show_errors(self) -> None:
         if self.state.active_view != "errors":
             self.state.set_view("errors")
+            self._sync_view()
+
+    def action_show_latency(self) -> None:
+        if self.state.active_view != "latency":
+            self.state.set_view("latency")
             self._sync_view()
 
     def action_focus_next_pane(self) -> None:
@@ -371,7 +380,7 @@ class DBusLensReportApp(App[None]):
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.list_view.id != "view-nav" or event.list_view.index is None:
             return
-        desired_view = {0: "outbound", 1: "inbound", 2: "errors"}[event.list_view.index]
+        desired_view = {0: "outbound", 1: "inbound", 2: "latency", 3: "errors"}[event.list_view.index]
         if desired_view == self.state.active_view:
             return
         self.state.set_view(desired_view)

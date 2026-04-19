@@ -163,6 +163,129 @@ class BuildReportTests(unittest.TestCase):
             report.inbound_rows[0].children[0].process,
             ProcessInfo(short_name="demo-client", pid=1010),
         )
+        self.assertEqual(len(report.latency_summaries), 1)
+        self.assertEqual(report.latency_summaries[0].target, "org.example.Service")
+        self.assertEqual(report.latency_summaries[0].operation, "org.example.Demo.Ping")
+        self.assertEqual(report.latency_summaries[0].average_latency_ms, 1000.0)
+
+    def test_build_report_ranks_calls_by_average_latency(self) -> None:
+        events = [
+            Event(
+                timestamp=1.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Slow",
+                serial=1,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=1.6,
+                message_type="method_return",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=2,
+                reply_serial=1,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.0,
+                message_type="method_call",
+                sender=":1.10",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Slow",
+                serial=3,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=2.4,
+                message_type="error",
+                sender="org.example.Service",
+                destination=":1.10",
+                path=None,
+                interface=None,
+                member=None,
+                serial=4,
+                reply_serial=3,
+                error_name="org.example.Error.Timeout",
+            ),
+            Event(
+                timestamp=3.0,
+                message_type="method_call",
+                sender=":1.11",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="Fast",
+                serial=5,
+                reply_serial=None,
+                error_name=None,
+            ),
+            Event(
+                timestamp=3.1,
+                message_type="method_return",
+                sender="org.example.Service",
+                destination=":1.11",
+                path=None,
+                interface=None,
+                member=None,
+                serial=6,
+                reply_serial=5,
+                error_name=None,
+            ),
+            Event(
+                timestamp=4.0,
+                message_type="method_call",
+                sender=":1.12",
+                destination="org.example.Service",
+                path="/org/example/Demo",
+                interface="org.example.Demo",
+                member="NoReply",
+                serial=7,
+                reply_serial=None,
+                error_name=None,
+            ),
+        ]
+
+        report = build_report(
+            events,
+            snapshot_names=_snapshot_names(
+                {
+                    "name": "org.example.Service",
+                    "owner": ":1.42",
+                    "pid": 2020,
+                    "uid": 1000,
+                    "cmdline": ["/usr/bin/example-service"],
+                    "error": None,
+                }
+            ),
+        )
+
+        self.assertEqual(len(report.latency_summaries), 2)
+        slow, fast = report.latency_summaries
+
+        self.assertEqual(slow.target, "org.example.Service")
+        self.assertEqual(slow.operation, "org.example.Demo.Slow")
+        self.assertEqual(slow.count, 2)
+        self.assertEqual(slow.average_latency_ms, 500.0)
+        self.assertEqual(slow.min_latency_ms, 400.0)
+        self.assertEqual(slow.max_latency_ms, 600.0)
+        self.assertEqual([detail.latency_ms for detail in slow.details], ["600.0 ms", "400.0 ms"])
+
+        self.assertEqual(fast.operation, "org.example.Demo.Fast")
+        self.assertEqual(fast.count, 1)
+        self.assertEqual(fast.average_latency_ms, 100.0)
+        self.assertEqual(fast.min_latency_ms, 100.0)
+        self.assertEqual(fast.max_latency_ms, 100.0)
 
     def test_build_report_uses_fallback_labels(self) -> None:
         events = [

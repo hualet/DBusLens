@@ -10,6 +10,8 @@ from dbuslens.models import (
     DetailRow,
     ErrorDetail,
     ErrorSummary,
+    LatencyDetail,
+    LatencySummary,
     ProcessInfo,
     Row,
 )
@@ -184,6 +186,7 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Senders", labels)
             self.assertIn("Members", labels)
             self.assertIn("Errors", labels)
+            self.assertIn("Latency", labels)
 
     async def test_textual_ui_sets_panel_border_titles(self) -> None:
         report = AnalysisReport(
@@ -211,6 +214,48 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             outbound_rows=[],
             inbound_rows=[],
             error_rows=[],
+            latency_summaries=[
+                LatencySummary(
+                    target="org.example.Service",
+                    operation="org.example.Demo.Slow",
+                    count=1,
+                    average_latency_ms=250.0,
+                    min_latency_ms=250.0,
+                    max_latency_ms=250.0,
+                    target_process=CaptureNameInfo(
+                        name="org.example.Service",
+                        owner=":1.42",
+                        pid=4242,
+                        uid=1000,
+                        cmdline=["/usr/bin/demo-service"],
+                    ),
+                    details=[
+                        LatencyDetail(
+                            caller=":1.10",
+                            caller_process=CaptureNameInfo(
+                                name=":1.10",
+                                owner=":1.10",
+                                pid=1010,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-client"],
+                            ),
+                            target="org.example.Service",
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            operation="org.example.Demo.Slow",
+                            latency_ms="250.0 ms",
+                            timestamp=1.0,
+                            path="/org/example/Demo",
+                            args_preview="['demo']",
+                        )
+                    ],
+                )
+            ],
             error_summaries=[
                 ErrorSummary(
                     error_name="org.freedesktop.DBus.Error.NameHasNoOwner",
@@ -311,6 +356,67 @@ class TextualLayoutTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
             self.assertEqual(app.state.active_view, "outbound")
             self.assertEqual(app.query_one("#main-table", DataTable).border_title, " senders ")
+
+    async def test_textual_ui_supports_latency_shortcut(self) -> None:
+        report = AnalysisReport(
+            source_path="record.cap",
+            total_events=2,
+            actionable_events=2,
+            skipped_blocks=0,
+            outbound_rows=[],
+            inbound_rows=[],
+            error_rows=[],
+            latency_summaries=[
+                LatencySummary(
+                    target="org.example.Service",
+                    operation="org.example.Demo.Slow",
+                    count=1,
+                    average_latency_ms=250.0,
+                    min_latency_ms=250.0,
+                    max_latency_ms=250.0,
+                    target_process=CaptureNameInfo(
+                        name="org.example.Service",
+                        owner=":1.42",
+                        pid=4242,
+                        uid=1000,
+                        cmdline=["/usr/bin/demo-service"],
+                    ),
+                    details=[
+                        LatencyDetail(
+                            caller=":1.10",
+                            caller_process=None,
+                            target="org.example.Service",
+                            target_process=CaptureNameInfo(
+                                name="org.example.Service",
+                                owner=":1.42",
+                                pid=4242,
+                                uid=1000,
+                                cmdline=["/usr/bin/demo-service"],
+                            ),
+                            operation="org.example.Demo.Slow",
+                            latency_ms="250.0 ms",
+                            timestamp=1.0,
+                            path="/org/example/Demo",
+                            args_preview="['demo']",
+                        )
+                    ],
+                )
+            ],
+        )
+        app = DBusLensReportApp(report)
+
+        async with app.run_test() as pilot:
+            await pilot.press("l")
+            await pilot.pause()
+
+            main_table = app.query_one("#main-table", DataTable)
+            detail_table = app.query_one("#detail-table", DataTable)
+
+            self.assertEqual(app.state.active_view, "latency")
+            self.assertEqual(main_table.border_title, " latency ")
+            self.assertEqual(detail_table.border_title, " calls ")
+            self.assertEqual(main_table.row_count, 1)
+            self.assertEqual(detail_table.row_count, 1)
 
     async def test_textual_ui_allows_dragging_detail_column_width(self) -> None:
         report = AnalysisReport(

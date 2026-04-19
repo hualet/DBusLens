@@ -131,6 +131,37 @@ class ErrorSummary:
 
 
 @dataclass(frozen=True)
+class LatencyDetail:
+    caller: str
+    caller_process: CaptureNameInfo | None
+    target: str
+    target_process: CaptureNameInfo | None
+    operation: str
+    latency_ms: str
+    timestamp: float | None = None
+    path: str = "-"
+    args_preview: str = "not captured"
+
+
+@dataclass(frozen=True)
+class LatencySummary:
+    target: str
+    operation: str
+    count: int
+    average_latency_ms: float
+    min_latency_ms: float
+    max_latency_ms: float
+    target_process: CaptureNameInfo | None
+    details: list[LatencyDetail]
+
+    @property
+    def owner_label(self) -> str:
+        if self.target_process is None:
+            return self.target
+        return self.target_process.display_name
+
+
+@dataclass(frozen=True)
 class AnalysisReport:
     source_path: str
     total_events: int
@@ -139,6 +170,7 @@ class AnalysisReport:
     outbound_rows: list[Row]
     inbound_rows: list[Row]
     error_rows: list[Row]
+    latency_summaries: list[LatencySummary] = field(default_factory=list)
     error_summaries: list[ErrorSummary] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
@@ -150,5 +182,6 @@ class AnalysisReport:
             "outbound_rows": [asdict(row) for row in self.outbound_rows],
             "inbound_rows": [asdict(row) for row in self.inbound_rows],
             "error_rows": [asdict(row) for row in self.error_rows],
+            "latency_summaries": [asdict(summary) for summary in self.latency_summaries],
             "error_summaries": [asdict(summary) for summary in self.error_summaries],
         }

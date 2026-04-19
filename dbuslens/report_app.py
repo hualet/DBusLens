@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dbuslens.models import AnalysisReport, CaptureNameInfo, ErrorSummary, Row
+from dbuslens.models import AnalysisReport, CaptureNameInfo, ErrorSummary, LatencySummary, Row
 
 
 @dataclass
@@ -20,12 +20,14 @@ class ReportAppState:
         self.selected_index = 0
 
     @property
-    def current_row(self) -> Row | ErrorSummary | None:
+    def current_row(self) -> Row | ErrorSummary | LatencySummary | None:
         rows = (
             self.report.outbound_rows
             if self.active_view == "outbound"
             else self.report.inbound_rows
             if self.active_view == "inbound"
+            else self.report.latency_summaries
+            if self.active_view == "latency"
             else self.report.error_summaries
         )
         if self.selected_index < 0 or self.selected_index >= len(rows):
@@ -38,15 +40,19 @@ def main_columns(state: ReportAppState) -> tuple[str, ...]:
         return ("Count", "Service", "Process")
     if state.active_view == "inbound":
         return ("Count", "Operation")
+    if state.active_view == "latency":
+        return ("Avg", "Count", "Target", "Operation")
     return ("Count", "Error", "Target", "Operation")
 
 
-def current_rows(state: ReportAppState) -> list[Row | ErrorSummary]:
+def current_rows(state: ReportAppState) -> list[Row | ErrorSummary | LatencySummary]:
     return (
         state.report.outbound_rows
         if state.active_view == "outbound"
         else state.report.inbound_rows
         if state.active_view == "inbound"
+        else state.report.latency_summaries
+        if state.active_view == "latency"
         else state.report.error_summaries
     )
 
@@ -56,6 +62,11 @@ def main_rows(state: ReportAppState) -> list[tuple[str, ...]]:
     if state.active_view == "outbound":
         return [
             (str(row.count), row.name, row.process.display_name if row.process else "-")
+            for row in rows
+        ]
+    if state.active_view == "latency":
+        return [
+            (_format_latency(row.average_latency_ms), str(row.count), row.target, row.operation)
             for row in rows
         ]
     if state.active_view == "errors":
@@ -74,6 +85,13 @@ def main_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
             _width_for_column(("Service",), rows, 1, minimum=18, maximum=48),
             _width_for_column(("Process",), rows, 2, minimum=12, maximum=96),
         )
+    if state.active_view == "latency":
+        return (
+            12,
+            8,
+            _width_for_column(("Target",), rows, 2, minimum=18, maximum=48),
+            _width_for_column(("Operation",), rows, 3, minimum=24, maximum=96),
+        )
     if state.active_view == "errors":
         return (
             8,
@@ -91,6 +109,17 @@ def detail_lines(state: ReportAppState) -> list[str]:
     current = state.current_row
     if current is None:
         return ["No detail available."]
+
+    if state.active_view == "latency" and isinstance(current, LatencySummary):
+        return [
+            f"Selected: {current.operation}",
+            f"Target: {current.target}",
+            f"Samples: {current.count}",
+            f"Average latency: {_format_latency(current.average_latency_ms)}",
+            f"Min latency: {_format_latency(current.min_latency_ms)}",
+            f"Max latency: {_format_latency(current.max_latency_ms)}",
+            f"Target owner at capture time: {_capture_owner_text(current.target_process)}",
+        ]
 
     if state.active_view == "errors" and isinstance(current, ErrorSummary):
         return [
@@ -123,6 +152,8 @@ def detail_columns(state: ReportAppState) -> tuple[str, ...]:
         return ("Count", "Operation")
     if state.active_view == "inbound":
         return ("Count", "Service", "Process")
+    if state.active_view == "latency":
+        return ("Time", "Caller", "Target", "Operation", "Args", "Latency")
     return ("Time", "Sender", "Destination", "Member", "Args", "Latency", "Notes")
 
 
@@ -132,6 +163,18 @@ def detail_rows(state: ReportAppState) -> list[tuple[str, ...]]:
         return []
     if state.active_view == "outbound":
         return [(str(row.count), row.name) for row in current.children]
+    if state.active_view == "latency":
+        return [
+            (
+                _format_timestamp(row.timestamp),
+                row.caller,
+                row.target,
+                row.operation,
+                row.args_preview,
+                row.latency_ms,
+            )
+            for row in current.details
+        ]
     if state.active_view == "errors":
         return [
             (
@@ -157,6 +200,15 @@ def detail_column_widths(state: ReportAppState) -> tuple[int | None, ...]:
         return (
             8,
             _width_for_column(("Operation",), rows, 1, minimum=24, maximum=96),
+        )
+    if state.active_view == "latency":
+        return (
+            _width_for_column(("Time",), rows, 0, minimum=10, maximum=14),
+            _width_for_column(("Caller",), rows, 1, minimum=12, maximum=20),
+            _width_for_column(("Target",), rows, 2, minimum=14, maximum=24),
+            _width_for_column(("Operation",), rows, 3, minimum=20, maximum=96),
+            _width_for_column(("Args",), rows, 4, minimum=24, maximum=96),
+            _width_for_column(("Latency",), rows, 5, minimum=10, maximum=16),
         )
     if state.active_view == "errors":
         return (

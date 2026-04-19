@@ -11,6 +11,8 @@ from dbuslens.models import (
     ErrorDetail,
     ErrorSummary,
     Event,
+    LatencyDetail,
+    LatencySummary,
     ProcessInfo,
     Row,
 )
@@ -80,6 +82,12 @@ def build_report(
         snapshot_index,
         resolver,
     )
+    latency_summaries = _build_latency_summaries(
+        events,
+        call_index,
+        snapshot_index,
+        resolver,
+    )
 
     return AnalysisReport(
         source_path=source_path,
@@ -89,6 +97,7 @@ def build_report(
         outbound_rows=_build_rows(outbound_totals, outbound_children, resolve_process),
         inbound_rows=_build_rows(inbound_totals, inbound_children, resolve_process),
         error_rows=_build_error_rows(error_totals, error_children, resolve_process),
+        latency_summaries=latency_summaries,
         error_summaries=error_summaries,
     )
 
@@ -422,6 +431,97 @@ def _build_error_identity(event: Event, original: Event | None) -> tuple[str, st
     caller_name = event.destination or UNKNOWN_ERROR_CALLER
     operation = UNKNOWN_OPERATION
     return target_name, caller_name, operation
+
+
+def _build_latency_summaries(
+    events: list[Event],
+    call_index: dict[tuple[str | None, str | None, int], Event],
+    snapshot_index: dict[str, CaptureNameInfo],
+    resolver: NameTimelineResolver,
+) -> list[LatencySummary]:
+    buckets: dict[tuple[str, str], dict[str, object]] = {}
+
+    for event in events:
+        if event.message_type not in {"method_return", "error"}:
+            continue
+
+        original = _find_original_call(event, call_index, snapshot_index, resolver)
+        if (
+            original is None
+            or original.timestamp is None
+            or event.timestamp is None
+            or original.message_type != "method_call"
+        ):
+            continue
+
+        target_source = original.destination or event.sender or UNKNOWN_ERROR_TARGET
+        operation = original.operation if original.operation != "<unknown>" else UNKNOWN_OPERATION
+        target_resolved = resolver.resolve_name(target_source, timestamp=event.timestamp)
+        caller_source = original.sender or event.destination or UNKNOWN_ERROR_CALLER
+        caller_resolved = resolver.resolve_name(caller_source, timestamp=event.timestamp)
+        latency_ms = (event.timestamp - original.timestamp) * 1000
+
+        bucket = buckets.setdefault(
+            (target_source, operation),
+            {
+                "count": 0,
+                "latency_total_ms": 0.0,
+                "min_latency_ms": latency_ms,
+                "max_latency_ms": latency_ms,
+                "target_process": _capture_name_info_from_resolved(target_resolved),
+                "details": [],
+            },
+        )
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["latency_total_ms"] = float(bucket["latency_total_ms"]) + latency_ms
+        bucket["min_latency_ms"] = min(float(bucket["min_latency_ms"]), latency_ms)
+        bucket["max_latency_ms"] = max(float(bucket["max_latency_ms"]), latency_ms)
+        if bucket["target_process"] is None:
+            bucket["target_process"] = _capture_name_info_from_resolved(target_resolved)
+        bucket["details"].append(
+            LatencyDetail(
+                caller=caller_resolved.display_name,
+                caller_process=_capture_name_info_from_resolved(caller_resolved),
+                target=target_resolved.display_name,
+                target_process=_capture_name_info_from_resolved(target_resolved),
+                operation=operation,
+                latency_ms=_format_latency_ms(latency_ms),
+                timestamp=event.timestamp,
+                path=original.path if original.path else "-",
+                args_preview=_args_preview_for(original),
+            )
+        )
+
+    summaries: list[LatencySummary] = []
+    for (target_source, operation), bucket in sorted(
+        buckets.items(),
+        key=lambda item: (
+            -_average_latency_ms(float(item[1]["latency_total_ms"]), int(item[1]["count"])),
+            item[0][0],
+            item[0][1],
+        ),
+    ):
+        count = int(bucket["count"])
+        summaries.append(
+            LatencySummary(
+                target=target_source,
+                operation=operation,
+                count=count,
+                average_latency_ms=round(float(bucket["latency_total_ms"]) / count, 1),
+                min_latency_ms=round(float(bucket["min_latency_ms"]), 1),
+                max_latency_ms=round(float(bucket["max_latency_ms"]), 1),
+                target_process=bucket["target_process"],
+                details=sorted(
+                    bucket["details"],
+                    key=lambda detail: (
+                        -float(detail.latency_ms.removesuffix(" ms")),
+                        float("inf") if detail.timestamp is None else detail.timestamp,
+                        detail.caller,
+                    ),
+                ),
+            )
+        )
+    return summaries
 
 
 def _find_original_call(
