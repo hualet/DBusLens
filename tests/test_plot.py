@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 from dbus_fast.constants import MessageType
 from dbus_fast.message import Message
@@ -9,7 +10,7 @@ from dbus_fast.message import Message
 from dbuslens.bundle import BundleContents, BundleMetadata, write_bundle
 from dbuslens.cli import _handle_plot, build_parser
 from dbuslens.models import Event
-from dbuslens.plot import build_dependency_dot
+from dbuslens.plot import build_dependency_dot, render_graphviz_output
 from tests.test_pcap_parser import build_pcap_bytes
 
 
@@ -22,7 +23,7 @@ class PlotTests(unittest.TestCase):
         self.assertEqual(args.command, "plot")
         self.assertEqual(args.input, "record.dblens")
         self.assertIsNone(args.output)
-        self.assertEqual(args.format, "dot")
+        self.assertEqual(args.format, "svg")
         self.assertEqual(args.raw, False)
 
     def test_build_dependency_dot_simplifies_unique_names_and_filters_dbus_noise(self) -> None:
@@ -90,7 +91,7 @@ class PlotTests(unittest.TestCase):
             min_count=1,
         )
 
-        self.assertIn('"org.example.Client" -> "org.example.Service" [label="1"];', dot)
+        self.assertIn('"org.example.Client" -> "org.example.Service" [label="1"', dot)
         self.assertNotIn('":1.11"', dot)
         self.assertNotIn("org.freedesktop.DBus", dot)
         self.assertIn("digraph dbus_dependencies {", dot)
@@ -126,7 +127,7 @@ class PlotTests(unittest.TestCase):
             raw=True,
         )
 
-        self.assertIn('":1.10" -> "org.example.Service" [label="2"];', dot)
+        self.assertIn('":1.10" -> "org.example.Service" [label="2"', dot)
 
     def test_build_dependency_dot_keeps_single_edge_by_default(self) -> None:
         dot = build_dependency_dot(
@@ -146,7 +147,7 @@ class PlotTests(unittest.TestCase):
             ]
         )
 
-        self.assertIn('"org.example.Client" -> "org.example.Service" [label="1"];', dot)
+        self.assertIn('"org.example.Client" -> "org.example.Service" [label="1"', dot)
 
     def test_build_dependency_dot_hides_unresolved_unique_names_in_simplified_mode(self) -> None:
         dot = build_dependency_dot(
@@ -179,7 +180,43 @@ class PlotTests(unittest.TestCase):
             min_count=1,
         )
 
-        self.assertEqual(dot, "digraph dbus_dependencies {\n}\n")
+        self.assertNotIn('":1.10"', dot)
+        self.assertNotIn('":1.11"', dot)
+        self.assertNotIn("->", dot)
+
+    def test_build_dependency_dot_includes_project_theme_attributes(self) -> None:
+        dot = build_dependency_dot(
+            [
+                Event(
+                    timestamp=1.0,
+                    message_type="method_call",
+                    sender="org.example.Client",
+                    destination="org.example.Service",
+                    path="/org/example/Demo",
+                    interface="org.example.Demo",
+                    member="Ping",
+                    serial=1,
+                    reply_serial=None,
+                    error_name=None,
+                )
+            ]
+        )
+
+        self.assertIn('bgcolor="#080a0f"', dot)
+        self.assertIn('color="#6ee7b7"', dot)
+        self.assertIn('fontcolor="#fcd34d"', dot)
+
+    def test_render_graphviz_output_uses_dot_command(self) -> None:
+        with patch("dbuslens.plot.subprocess.run") as run:
+            run.return_value.stdout = b"<svg>ok</svg>"
+            run.return_value.stderr = b""
+
+            rendered = render_graphviz_output("digraph { a -> b; }\n", output_format="svg")
+
+        self.assertEqual(rendered, "<svg>ok</svg>")
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(command, ["dot", "-Tsvg"])
 
     def test_handle_plot_writes_dot_output(self) -> None:
         capture = build_pcap_bytes(
@@ -245,7 +282,7 @@ class PlotTests(unittest.TestCase):
             )
 
             self.assertEqual(exit_code, 0)
-            self.assertIn('":1.10" -> "org.example.Service" [label="2"];', output_path.read_text())
+            self.assertIn('":1.10" -> "org.example.Service" [label="2"', output_path.read_text())
 
     def test_handle_plot_uses_default_output_path_from_input(self) -> None:
         capture = build_pcap_bytes(
@@ -267,7 +304,7 @@ class PlotTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "sample.dblens"
-            default_output_path = Path(tmpdir) / "sample.dot"
+            default_output_path = Path(tmpdir) / "sample.svg"
             write_bundle(
                 input_path,
                 BundleContents(
@@ -294,16 +331,14 @@ class PlotTests(unittest.TestCase):
                 ),
             )
 
-            exit_code = _handle_plot(
-                Namespace(input=str(input_path), output=None, format="dot", raw=False)
-            )
+            with patch("dbuslens.cli.render_graphviz_output", return_value="<svg>ok</svg>"):
+                exit_code = _handle_plot(
+                    Namespace(input=str(input_path), output=None, format="svg", raw=False)
+                )
 
             self.assertEqual(exit_code, 0)
             self.assertTrue(default_output_path.exists())
-            self.assertIn(
-                '"org.example.Client" -> "org.example.Service" [label="1"];',
-                default_output_path.read_text(),
-            )
+            self.assertEqual(default_output_path.read_text(), "<svg>ok</svg>")
 
 
 if __name__ == "__main__":

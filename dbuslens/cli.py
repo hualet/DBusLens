@@ -5,7 +5,7 @@ import importlib
 from pathlib import Path
 import sys
 
-from dbuslens.plot import build_dependency_dot_from_bundle
+from dbuslens.plot import build_dependency_dot_from_bundle, render_graphviz_output
 from dbuslens.record import RecordError, build_default_output_path, record_monitor
 from dbuslens.tui import run_report
 
@@ -22,10 +22,10 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="report a saved capture")
     report_parser.add_argument("--input", default="record.dblens")
 
-    plot_parser = subparsers.add_parser("plot", help="write a dependency graph in dot format")
+    plot_parser = subparsers.add_parser("plot", help="write a dependency graph")
     plot_parser.add_argument("--input", default="record.dblens")
     plot_parser.add_argument("--output")
-    plot_parser.add_argument("--format", choices=["dot"], default="dot")
+    plot_parser.add_argument("--format", choices=["svg", "dot"], default="svg")
     plot_parser.add_argument("--raw", action="store_true", help="keep raw unique-name nodes")
 
     completion_parser = subparsers.add_parser("completion", help="print shell completion script")
@@ -86,12 +86,13 @@ def _handle_plot(args: argparse.Namespace) -> int:
         raise ValueError(f"input file is empty: {input_path}")
 
     dot = build_dependency_dot_from_bundle(input_path, raw=args.raw)
+    rendered_output = dot if args.format == "dot" else render_graphviz_output(dot, output_format=args.format)
     if args.output == "-":
-        print(dot, end="")
+        print(rendered_output, end="")
         return 0
 
-    output_path = Path(args.output) if args.output else input_path.with_suffix(".dot")
-    output_path.write_text(dot, encoding="utf-8")
+    output_path = Path(args.output) if args.output else input_path.with_suffix(f".{args.format}")
+    output_path.write_text(rendered_output, encoding="utf-8")
     print(output_path)
     return 0
 

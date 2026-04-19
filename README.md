@@ -49,6 +49,7 @@ DBusLens currently targets Linux systems with D-Bus tooling available on `PATH`.
 - Linux
 - `dbus-monitor`
 - `gdbus`
+- `dot` from Graphviz for `plot` SVG output
 
 ### Install
 
@@ -104,22 +105,24 @@ dbuslens report
 dbuslens report --input /tmp/system.dblens
 ```
 
-Generate a dependency graph in Graphviz DOT format:
+Generate a dependency graph:
 
 ```bash
 dbuslens plot
 dbuslens plot --input /tmp/system.dblens
-dbuslens plot --input /tmp/system.dblens --output graph.dot
-dbuslens plot --input /tmp/system.dblens --raw --output graph-raw.dot
+dbuslens plot --input /tmp/system.dblens --output graph.svg
+dbuslens plot --input /tmp/system.dblens --format dot --output graph.dot
+dbuslens plot --input /tmp/system.dblens --raw --output graph-raw.svg
 ```
 
 `plot` writes a simplified dependency graph by default:
 
 - nodes prefer captured well-known service names over transient unique names
 - `org.freedesktop.DBus` traffic is hidden
+- SVG output uses a dark theme aligned with the terminal UI colors
 
-When `--output` is omitted, `plot` writes next to the input bundle with a `.dot` suffix.
-Use `--output -` when you want the DOT content on stdout.
+When `--output` is omitted, `plot` writes next to the input bundle with a suffix matching `--format`.
+Use `--output -` when you want the rendered output on stdout.
 
 Use `--raw` when you want the unfiltered graph with raw unique-name nodes.
 
@@ -127,7 +130,7 @@ Default behavior:
 
 - `record` uses the `session` bus by default
 - `report` reads `record.dblens` by default
-- `plot` reads `record.dblens` and writes `record.dot` by default
+- `plot` reads `record.dblens` and writes `record.svg` by default
 
 Typical workflow:
 
