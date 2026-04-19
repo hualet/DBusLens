@@ -5,6 +5,7 @@ import importlib
 from pathlib import Path
 import sys
 
+from dbuslens.plot import build_dependency_dot_from_bundle
 from dbuslens.record import RecordError, build_default_output_path, record_monitor
 from dbuslens.tui import run_report
 
@@ -21,6 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="report a saved capture")
     report_parser.add_argument("--input", default="record.dblens")
 
+    plot_parser = subparsers.add_parser("plot", help="write a dependency graph in dot format")
+    plot_parser.add_argument("--input", default="record.dblens")
+    plot_parser.add_argument("--output", default="-")
+    plot_parser.add_argument("--format", choices=["dot"], default="dot")
+    plot_parser.add_argument("--raw", action="store_true", help="keep raw unique-name nodes")
+
     completion_parser = subparsers.add_parser("completion", help="print shell completion script")
     completion_parser.add_argument("shell", choices=["bash", "zsh"])
 
@@ -35,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_record(args)
         if args.command == "report":
             return _handle_report(args)
+        if args.command == "plot":
+            return _handle_plot(args)
         if args.command == "completion":
             return _handle_completion(args)
     except (RecordError, ValueError) as exc:
@@ -64,6 +73,26 @@ def _handle_report(args: argparse.Namespace) -> int:
     if input_path.stat().st_size == 0:
         raise ValueError(f"input file is empty: {input_path}")
     run_report(input_path)
+    return 0
+
+
+def _handle_plot(args: argparse.Namespace) -> int:
+    input_path = Path(args.input)
+    if input_path.suffix != ".dblens":
+        raise ValueError("plot input must use the .dblens extension")
+    if not input_path.exists():
+        raise ValueError(f"input file not found: {input_path}")
+    if input_path.stat().st_size == 0:
+        raise ValueError(f"input file is empty: {input_path}")
+
+    dot = build_dependency_dot_from_bundle(input_path, raw=args.raw)
+    if args.output == "-":
+        print(dot, end="")
+        return 0
+
+    output_path = Path(args.output)
+    output_path.write_text(dot, encoding="utf-8")
+    print(output_path)
     return 0
 
 
