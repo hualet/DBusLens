@@ -215,3 +215,5 @@ __marimo__/
 # record output
 *.cap
 *.dblens
+record.dot
+record.svg
