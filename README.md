@@ -36,6 +36,10 @@ DBusLens is a terminal tool for recording and inspecting D-Bus traffic. It store
 
 ![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/members.svg)
 
+### Latency
+
+![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/latency.svg)
+
 ### Errors
 
 ![](https://raw.githubusercontent.com/hualet/DBusLens/main/docs/attachments/errors.svg)
